@@ -1,0 +1,21 @@
+{
+  "short_name": "ZeroReader",
+  "name": "Zero-Frame Manga Reader",
+  "icons": [
+    {
+      "src": "https://placehold.co",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://placehold.co",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "index.html",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "display": "fullscreen",
+  "orientation": "portrait"
+}
