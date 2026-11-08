@@ -33,7 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ API REMANGA ---
-    const API_BASE = 'https://api.remanga.org/api';
+    // Пропускаем запросы к ReManga через твой Cloudflare Worker
+const API_BASE = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=' + encodeURIComponent('https://api.remanga.org/api');
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
