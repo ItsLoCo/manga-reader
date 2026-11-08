@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             // Используем стабильный эндпоинт поиска ReManga
-            const targetUrl = `${API_BASE}/search/?field=titles&count=10&page=1&query=${encodeURIComponent(query)}`;
+            const targetUrl = `${API_BASE}/search/?field=titles&count=10&page=1&query=${query}`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
