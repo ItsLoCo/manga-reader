@@ -128,13 +128,18 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
+     // 1. ПОЛУЧЕНИЕ СПИСКА РЕАЛЬНЫХ ГЛАВ НА РУССКОМ С MANGADEX
     async function fetchChapters(mangaId) {
         try {
-            chaptersList = [
-                { id: "ch1", title: "Глава 1 - Начало пути" },
-                { id: "ch2", title: "Глава 2 - Новая сила" },
-                { id: "ch3", title: "Глава 3 - Без рамок" }
-            ];
+            // Запрашиваем список глав, отсортированных по возрастанию, строго на русском языке (ru)
+            const response = await fetch(`https://mangadex.org{mangaId}/feed?translatedLanguage[]=ru&order[chapter]=asc&limit=100`);
+            const json = await response.json();
+            
+            // Забиваем массив главами в красивом формате
+            chaptersList = json.data.map(ch => ({ 
+                id: ch.id, 
+                title: ch.attributes.chapter ? `Гл. ${ch.attributes.chapter} - ${ch.attributes.title || ''}` : `Глава без номера` 
+            }));
             
             chapterSelect.innerHTML = '';
             chaptersList.forEach(ch => { 
@@ -144,73 +149,116 @@ document.addEventListener('DOMContentLoaded', () => {
                 chapterSelect.appendChild(opt); 
             });
             
-            startScreen.classList.add('hidden');
-            readerScreen.classList.remove('hidden');
+            // Если главы найдены, переключаем экраны со старта на читалку
+            if (chaptersList.length > 0) {
+                startScreen.classList.add('hidden');
+                readerScreen.classList.remove('hidden');
 
-            chapterSelect.selectedIndex = 0;
-            loadChapterPages(chaptersList[0].id); // ТУТ БЫЛ ФИКС ИСПРАВЛЕНИЯ ОШИБКИ
-
-        } catch (err) { reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка глав</div>`; }
+                const savedCh = localStorage.getItem('reader_last_chapter');
+                if (savedCh && chaptersList.some(c => c.id === savedCh)) { 
+                    chapterSelect.value = savedCh; 
+                    loadChapterPages(savedCh); 
+                } else { 
+                    switchChapter(0); 
+                }
+            } else {
+                alert("У этой манги пока нет перевода на русский язык на MangaDex!");
+            }
+        } catch (err) { 
+            console.error(err);
+            reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка загрузки списка глав</div>`; 
+        }
     }
-
+    
     async function loadChapterPages(chapterId) {
-        reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
+        reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц главы...</div>`;
         progressBar.style.width = '0%';
         try {
+            // Запрашиваем адреса картинок у сервера раздачи картинок (MangaDex At-Home)
+            const response = await fetch(`https://mangadex.org{chapterId}`);
+            const json = await response.json();
+            
+            const baseUrl = json.baseUrl;
+            const hash = json.chapter.hash;
+            const pageFiles = json.chapter.data; // Массив имен файлов всех страниц
+
             reader.innerHTML = '';
-            const observer = new IntersectionObserver((entries) => { entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); }, { root: reader, threshold: 0.05 });
             
-            for (let i = 1; i <= 3; i++) {
-                const pageBlock = document.createElement('div');
-                pageBlock.className = 'test-page-block';
-                pageBlock.style.width = '100vw';
-                pageBlock.style.height = '1200px'; 
-                pageBlock.style.display = 'flex';
-                pageBlock.style.flexDirection = 'column';
-                pageBlock.style.justifyContent = 'center';
-                pageBlock.style.alignItems = 'center';
-                pageBlock.style.background = i % 2 === 0 ? '#0d0d11' : '#14141c'; 
-                pageBlock.style.borderBottom = '2px solid #262636';
-                
-                pageBlock.style.opacity = '0';
-                pageBlock.style.transform = 'translate3d(0, 20px, 0)';
-                pageBlock.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                
-                pageBlock.innerHTML = `
-                    <h1 style="color: #8a2be2; font-size: 28px; margin-bottom: 10px; font-family: sans-serif;">СТРАНИЦА ${i}</h1>
-                    <p style="color: #555; font-size: 16px; font-family: sans-serif;">🔥 Автоскролл и безрамочность работают! 🔥</p>
-                `;
-                
-                reader.appendChild(pageBlock);
-                observer.observe(pageBlock);
-            }
+            // Настраиваем ленивую анимацию появления для картинок
+            const observer = new IntersectionObserver((entries) => { 
+                entries.forEach(e => { 
+                    if (e.isIntersecting) { 
+                        e.target.classList.add('fade-in'); 
+                        observer.unobserve(e.target); 
+                    } 
+                }); 
+            }, { root: reader, threshold: 0.05 });
             
-            setTimeout(() => {
-                const blocks = document.querySelectorAll('.test-page-block');
-                blocks.forEach(b => { b.style.opacity = '1'; b.style.transform = 'translate3d(0, 0, 0)'; });
-            }, 50);
+            // Собираем полные ссылки на веб-сервера раздачи картинок и создаем теги <img>
+            pageFiles.forEach((file) => {
+                const img = document.createElement('img');
+                // Собираем URL по официальному стандарту MangaDex API
+                img.src = `${baseUrl}/data/${hash}/${file}`;
+                img.loading = "lazy"; // Чтобы Safari на iPhone не зависал от 50 тяжелых картинок
+                reader.appendChild(img);
+                observer.observe(img);
+            });
             
             reader.scrollTo(0, 0);
             setTimeout(updateProgressIndicators, 100);
-        } catch (err) { reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка страниц.</div>`; }
+        } catch (err) { 
+            console.error(err);
+            reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка загрузки страниц. Сервер MangaDex перегружен.</div>`; 
+        }
     }
 
     async function searchManga(query) {
-if (!query.trim()) return;
-searchBtn.textContent = "Ищу...";
-searchResults.innerHTML = "";
-searchResults.classList.remove('hidden');
-const item = document.createElement('div');
-item.className = 'search-item';
-item.textContent = query + " (Нажми для чтения)";
-item.addEventListener('click', () => {
-searchResults.classList.add('hidden');
-searchInput.value = "";
-fetchChapters("test");
-});
-searchResults.appendChild(item);
-searchBtn.textContent = "Найти 🔍";
-}
+        if (!query.trim()) return;
+        searchBtn.textContent = "Ищу...";
+        searchResults.innerHTML = "";
+        searchResults.classList.remove('hidden');
+        try {
+            // Запрос ищет совпадения по названию, альтернативным переводам (altTitles) и оригинальным именам
+            const response = await fetch(`https://mangadex.org{encodeURIComponent(query)}&limit=5`);
+            const json = await response.json();
+            
+            if (json.data.length === 0) { 
+                searchResults.innerHTML = `<div class="search-item">Ничего не найдено. Попробуйте другое название!</div>`; 
+                searchBtn.textContent = "Найти 🔍"; 
+                return; 
+            }
+            
+            json.data.forEach(manga => {
+                // Берем приоритетно русский заголовок, если его нет — английский или оригинальный японский
+                const title = manga.attributes.title.ru || manga.attributes.title.en || Object.values(manga.attributes.title)[0];
+                
+                const item = document.createElement('div');
+                item.className = 'search-item';
+                item.textContent = title;
+                
+                // Клик по результату запускает вытягивание реальных глав
+                item.addEventListener('click', () => {
+                    currentMangaId = manga.id;
+                    localStorage.setItem('reader_last_manga_id', manga.id);
+                    localStorage.setItem('reader_last_chapter', '');
+                    localStorage.setItem('reader_last_position', 0);
+                    
+                    stopAutoscroll(); 
+                    autoscrollToggle.checked = false;
+                    
+                    fetchChapters(manga.id);
+                    searchResults.classList.add('hidden'); 
+                    searchInput.value = "";
+                });
+                searchResults.appendChild(item);
+            });
+            searchBtn.textContent = "Найти 🔍";
+        } catch (err) { 
+            console.error(err);
+            searchBtn.textContent = "Найти 🔍"; 
+            searchResults.innerHTML = `<div class="search-item" style="color:red;">Ошибка сети. Проверьте интернет.</div>`;
+        }
+    }
 // --- УПРАВЛЕНИЕ ТАПАМИ И ИНТЕРФЕЙСОМ ---
 menuTrigger.addEventListener('click', () => {
 if (settingsMenu.style.transform === 'translateY(0%)') {
