@@ -89,10 +89,8 @@ html, body {
 
 /* Результаты поиска */
 #search-results {
-    background: #16161f;
-    border: 1px solid #262636;
-    border-radius: 12px;
-    max-height: 200px;
+    /* ... другие строки ... */
+    max-height: 50vh; /* Теперь окно будет занимать пол-экрана */
     overflow-y: auto;
     text-align: left;
 }
