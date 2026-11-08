@@ -33,8 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ API REMANGA ---
-    // Пропускаем запросы к ReManga через твой Cloudflare Worker
-const API_BASE = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=' + encodeURIComponent('https://api.remanga.org/api');
+// Прямое подключение к ReManga, все запросы будут проходить через наш воркер
+const API_BASE = 'https://api.remanga.org/api';
+const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -159,8 +160,8 @@ const API_BASE = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=' + encodeUR
         searchResults.classList.remove('hidden');
         
         try {
-            const response = await fetch(`${API_BASE}/v2/search/?field=titles&count=15&page=1&query=${encodeURIComponent(query)}`);
-            
+            const targetUrl = `${API_BASE}/v2/search/?field=titles&count=15&page=1&query=${encodeURIComponent(query)}`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
