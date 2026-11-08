@@ -151,6 +151,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================== ОСНОВНАЯ ЛОГИКА API ====================
 
     // 1. ПОИСК МАНГИ
+       // Функция для умного поиска названия (на русском, английском или любом другом)
+    function getMangaTitle(manga) {
+        const attrs = manga.attributes;
+        if (attrs.title.ru) return attrs.title.ru;
+        if (attrs.title.en) return attrs.title.en;
+        const titleKeys = Object.keys(attrs.title);
+        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
+        
+        if (attrs.altTitles && attrs.altTitles.length > 0) {
+            for (const alt of attrs.altTitles) {
+                if (alt.ru) return alt.ru;
+                if (alt.en) return alt.en;
+                const altKeys = Object.keys(alt);
+                if (altKeys.length > 0) return alt[altKeys[0]];
+            }
+        }
+        return 'Без названия';
+    }
+
+    // 1. ПОИСК МАНГИ
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
@@ -159,8 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // ИСПРАВЛЕНО: Формат запроса для нового прокси
-            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art`;
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art&order[relevance]=desc`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -171,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
                 data.data.forEach(manga => {
-                    const title = manga.attributes.title.ru || manga.attributes.title.en || 'Без названия';
+                    const title = getMangaTitle(manga); // <-- Используем нашу новую функцию
                     const item = document.createElement('div');
                     item.className = 'search-item';
                     item.textContent = title;
@@ -192,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
             searchBtn.disabled = false;
         }
     }
-
     // 2. ЗАГРУЗКА СПИСКА ГЛАВ
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
