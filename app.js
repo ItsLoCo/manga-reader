@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             searchBtn.disabled = false;
         }
     }
-    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
+        // 2. ЗАГРУЗКА СПИСКА ГЛАВ
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
@@ -232,10 +232,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error("Главы не найдены");
             }
 
-            chaptersList = data.data.map(ch => ({
-                id: ch.id,
-                title: ch.attributes.title || `Глава ${ch.attributes.chapter || '?'}`
-            }));
+            // ВОТ ТУТ БЫЛ ТОТ САМЫЙ CHAPTERSLIST
+            chaptersList = data.data.map(ch => {
+                const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
+                const chapterNum = ch.attributes.chapter || '?';
+                const chapterTitle = ch.attributes.title ? ` - ${ch.attributes.title}` : '';
+                
+                return {
+                    id: ch.id,
+                    title: `${lang} Глава ${chapterNum}${chapterTitle}`
+                };
+            });
 
             chapterSelect.innerHTML = '';
             chaptersList.forEach(ch => {
