@@ -173,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Без названия';
     }
 
+        // 1. ПОИСК МАНГИ (С ОТЛАДКОЙ)
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
@@ -181,25 +182,27 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // Убрали проблемный фильтр availableTranslatedLanguage
-            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art&order[relevance]=desc`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            // Убрал order[relevance]=desc, чтобы уменьшить шанс ошибки 400
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art`;
+            const finalUrl = CORS_PROXY + encodeURIComponent(targetUrl);
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            console.log("Отправляем на:", finalUrl);
+
+            const response = await fetch(finalUrl);
+            
+            // Если сервер вернул ошибку (400, 403, 500 и т.д.)
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Код ${response.status}: ${errorText.substring(0, 100)}`);
+            }
+            
             const data = await response.json();
 
             searchResults.innerHTML = '';
-            if (data.data.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                // Сортируем: сначала те, у кого есть русское название
-                const sortedManga = data.data.sort((a, b) => {
-                    const aHasRu = (a.attributes.altTitles?.some(t => t.ru) || a.attributes.title.ru) ? 1 : 0;
-                    const bHasRu = (b.attributes.altTitles?.some(t => t.ru) || b.attributes.title.ru) ? 1 : 0;
-                    return bHasRu - aHasRu; // Русские названия идут первыми
-                });
-
-                sortedManga.forEach(manga => {
+                data.data.forEach(manga => {
                     const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
@@ -215,7 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) { 
             console.error("Search error:", err);
-            searchResults.innerHTML = '<div class="search-item" style="color: #ff5555;">Ошибка поиска. Проверьте соединение.</div>';
+            // ВЫВОДИМ РЕАЛЬНУЮ ОШИБКУ НА ЭКРАН
+            searchResults.innerHTML = `<div class="search-item" style="color: #ff5555; font-size: 12px; word-break: break-all;">Ошибка: ${err.message}</div>`;
         } finally {
             searchBtn.textContent = "Найти 🔍"; 
             searchBtn.disabled = false;
