@@ -33,8 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ API ---
-    // Рабочий CORS-прокси. MangaDex не отдаёт CORS-заголовки для сторонних сайтов[reference:3], поэтому все запросы к API идут через него.
-    const CORS_PROXY = 'https://corsproxy.io/?';
+    // ИСПРАВЛЕНО: Заменен нерабочий corsproxy.io на бесплатный proxy.cors.dev
+    const CORS_PROXY = 'https://proxy.cors.dev/'; 
     const MANGADEX_API = 'https://api.mangadex.org';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
@@ -88,8 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (autoscrollInterval) cancelAnimationFrame(autoscrollInterval);
     }
 
-    // --- СВАЙПЫ (ИСПРАВЛЕНО) ---
-    // Слушаем на reader-screen, а не на reader, чтобы #menu-trigger не блокировал жесты
+    // --- СВАЙПЫ ---
     function handleTouchStart(e) {
         userInteracting = true; 
         clearTimeout(userInteractionTimeout);
@@ -123,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ПЕРЕКЛЮЧЕНИЕ ГЛАВ (ИСПРАВЛЕНО) ---
+    // --- ПЕРЕКЛЮЧЕНИЕ ГЛАВ ---
     async function switchChapter(index) {
         if (index < 0 || index >= chapterSelect.options.length) return;
         chapterSelect.selectedIndex = index;
@@ -133,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const wasAutoscroll = isAutoscrollActive;
         stopAutoscroll();
         
-        // Закрываем меню и панель навигации
         closeSettings();
         navNavigationPanel.classList.add('nav-hidden');
 
@@ -152,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== ОСНОВНАЯ ЛОГИКА API ====================
 
-    // 1. ПОИСК МАНГИ (ИСПРАВЛЕНО - теперь реальный запрос к MangaDex API)
+    // 1. ПОИСК МАНГИ
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
@@ -161,12 +159,14 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            const url = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + '/manga')}?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art`;
-            const response = await fetch(url);
+            // ИСПРАВЛЕНО: Формат запроса для нового прокси
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            searchResults.innerHTML = ''; // Очищаем на случай, если там что-то было
+            searchResults.innerHTML = '';
             if (data.data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
@@ -193,16 +193,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 2. ЗАГРУЗКА СПИСКА ГЛАВ (НОВАЯ ФУНКЦИЯ)
+    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Запрашиваем главы на русском (или английском, если русских нет), сортируем по порядку
-            const url = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + `/manga/${mangaId}/feed`)}?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
-            const response = await fetch(url);
+            const targetUrl = `${MANGADEX_API}/manga/${mangaId}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
@@ -215,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 title: ch.attributes.title || `Глава ${ch.attributes.chapter || '?'}`
             }));
 
-            // Заполняем селект глав
             chapterSelect.innerHTML = '';
             chaptersList.forEach(ch => {
                 const opt = document.createElement('option');
@@ -224,13 +223,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 chapterSelect.appendChild(opt);
             });
 
-            // Восстанавливаем последнюю прочитанную главу или начинаем с первой
             const savedCh = localStorage.getItem('reader_last_chapter');
             let savedIndex = chaptersList.findIndex(c => c.id === savedCh);
             if (savedIndex === -1) savedIndex = 0;
 
             chapterSelect.selectedIndex = savedIndex;
-            await switchChapter(savedIndex); // switchChapter сам загрузит страницы
+            await switchChapter(savedIndex);
 
         } catch (err) {
             console.error("Chapters error:", err);
@@ -238,35 +236,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ (ИСПРАВЛЕНО - используем at-home API)
+    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ
     async function loadChapterPages(chapterId) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            // Получаем метаданные для загрузки изображений
-            const serverUrl = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + `/at-home/server/${chapterId}`)}`;
-            const serverResponse = await fetch(serverUrl);
-            if (!serverResponse.ok) throw new Error(`HTTP ${serverResponse.status}`);
-            const serverData = await serverResponse.json();
+            const targetUrl = `${MANGADEX_API}/at-home/server/${chapterId}`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const serverData = await response.json();
 
             const baseUrl = serverData.baseUrl;
             const hash = serverData.chapter.hash;
-            const pageFiles = serverData.chapter.data; // Используем оригинальное качество
+            const pageFiles = serverData.chapter.data;
 
             if (!pageFiles || pageFiles.length === 0) {
                 throw new Error("В главе нет страниц");
             }
 
-            reader.innerHTML = ''; // Очищаем экран
+            reader.innerHTML = '';
 
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
             pageFiles.forEach((fileName, index) => {
-                // Собираем полный URL картинки согласно документации[reference:4]
-                // Формат: baseUrl / quality / hash / filename
                 const imageUrl = `${baseUrl}/data/${hash}/${fileName}`;
 
                 const pageBlock = document.createElement('div');
@@ -287,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.style.maxWidth = '100vw';
                 img.style.height = 'auto';
                 img.style.display = 'block';
-                // Важно: не отправляем заголовки авторизации при загрузке картинок[reference:5]
                 img.loading = 'lazy';
 
                 pageBlock.appendChild(img);
@@ -309,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ВОССТАНОВЛЕНИЕ ПОЗИЦИИ (НОВАЯ ФУНКЦИЯ) ---
+    // --- ВОССТАНОВЛЕНИЕ ПОЗИЦИИ ---
     function restoreScrollPosition() {
         const pos = parseFloat(localStorage.getItem('reader_last_position') || '0');
         if (pos > 0) {
@@ -325,10 +320,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ==================== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ====================
 
-    // --- МЕНЮ НАСТРОЕК (ИСПРАВЛЕНО - используем класс .hidden) ---
     function openSettings() {
         settingsMenu.classList.remove('hidden');
-        // Небольшая задержка, чтобы сработала CSS-транзиция
         requestAnimationFrame(() => {
             settingsMenu.style.transform = 'translateY(0%)';
         });
@@ -337,7 +330,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeSettings() {
         settingsMenu.style.transform = 'translateY(100%)';
-        // Снова скрываем после завершения анимации
         setTimeout(() => {
             settingsMenu.classList.add('hidden');
         }, 250); 
@@ -358,7 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closeMenu.addEventListener('click', closeSettings);
 
-    // --- СОХРАНЕНИЕ ПОЗИЦИИ ПРИ СКРОЛЛЕ ---
     let scrollTimeout;
     reader.addEventListener('scroll', () => {
         updateProgressIndicators();
@@ -371,7 +362,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 150);
     });
 
-    // --- СЛУШАТЕЛИ ИЗМЕНЕНИЙ НАСТРОЕК ---
     scrollModeSelect.addEventListener('change', (e) => { 
         setScrollMode(e.target.value); 
         localStorage.setItem('reader_scroll_mode', e.target.value); 
@@ -389,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     bgColorSelect.addEventListener('change', (e) => {
-        // Меняем фон не только у body, но и у всех блоков страниц
         document.body.style.backgroundColor = e.target.value;
         document.querySelectorAll('.page-block').forEach(block => {
             block.style.backgroundColor = e.target.value;
@@ -404,25 +393,19 @@ document.addEventListener('DOMContentLoaded', () => {
     searchBtn.addEventListener('click', () => searchManga(searchInput.value));
     searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchManga(searchInput.value); });
 
-    // --- СМЕНА РЕЖИМА ПРОКРУТКИ (ИСПРАВЛЕНО - теперь меняет классы корректно) ---
     function setScrollMode(mode) { 
-        // Удаляем все классы режимов
         reader.classList.remove('mode-webtoon', 'mode-paged-vertical', 'mode-paged-horizontal');
-        // Добавляем нужный
         reader.classList.add(`mode-${mode}`);
         setTimeout(updateProgressIndicators, 50); 
     }
 
-    // --- ИНИЦИАЛИЗАЦИЯ ---
     if ('serviceWorker' in navigator) { 
         navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err)); 
     }
 
-    // Восстанавливаем последний режим прокрутки
     const savedMode = localStorage.getItem('reader_scroll_mode') || 'webtoon';
     scrollModeSelect.value = savedMode;
     setScrollMode(savedMode);
 
-    // Изначально меню настроек скрыто
     closeSettings();
 });
