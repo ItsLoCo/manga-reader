@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- КОНСТАНТЫ API ---
     // ИСПРАВЛЕНО: Заменен нерабочий corsproxy.io на бесплатный proxy.cors.dev
-    const CORS_PROXY = 'tight-sea-1b3c.niko-rad3.workers.dev'; 
+    const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
     const MANGADEX_API = 'https://api.mangadex.org';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
