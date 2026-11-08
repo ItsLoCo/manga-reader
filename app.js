@@ -32,8 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
-    // --- КОНСТАНТЫ CONSUMET API ---
-    const API_BASE = 'https://api.consumet.org/manga/mangadex';
+    // --- КОНСТАНТЫ API ---
+    // Используем твой собственный воркер для проксирования запросов к MangaDex
+    const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
+    const MANGADEX_API = 'https://api.mangadex.org';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -146,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ОСНОВНАЯ ЛОГИКА CONSUMET API ====================
+    // ==================== ОСНОВНАЯ ЛОГИКА MANGADEX API ====================
 
     // 1. ПОИСК МАНГИ
     async function searchManga(query) {
@@ -157,23 +159,25 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // Поиск в Consumet: /manga/mangadex/{query}
-            const response = await fetch(`${API_BASE}/${encodeURIComponent(query)}`);
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Код ${response.status}: ${errorText.substring(0, 50)}`);
+            }
+            
             const data = await response.json();
 
             searchResults.innerHTML = '';
-            // Consumet возвращает результаты в массиве data.results
-            if (!data.results || data.results.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                data.results.forEach(manga => {
+                data.data.forEach(manga => {
+                    const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    // В Consumet название приходит строкой (или массивом строк)
-                    item.textContent = Array.isArray(manga.title) ? manga.title[0] : manga.title;
-                    
+                    item.textContent = title;
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
@@ -192,6 +196,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Вспомогательная функция для поиска названия
+    function getMangaTitle(manga) {
+        const attrs = manga.attributes;
+        if (attrs.title.ru) return attrs.title.ru;
+        if (attrs.title.en) return attrs.title.en;
+        const titleKeys = Object.keys(attrs.title);
+        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
+        if (attrs.altTitles && attrs.altTitles.length > 0) {
+            for (const alt of attrs.altTitles) {
+                if (alt.ru) return alt.ru;
+                if (alt.en) return alt.en;
+                const altKeys = Object.keys(alt);
+                if (altKeys.length > 0) return alt[altKeys[0]];
+            }
+        }
+        return 'Без названия';
+    }
+
     // 2. ЗАГРУЗКА СПИСКА ГЛАВ
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
@@ -199,31 +221,24 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Получение информации о манге (включая главы): /manga/mangadex/info?id={id}
-            const response = await fetch(`${API_BASE}/info?id=${mangaId}`);
+            const targetUrl = `${MANGADEX_API}/manga/${mangaId}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            if (!data.chapters || data.chapters.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 throw new Error("Главы не найдены");
             }
 
-            // Consumet возвращает главы в массиве data.chapters
-            chaptersList = data.chapters.map(ch => {
-                // Формат названия: "Глава X - Название" (если есть)
-                const title = ch.title ? `${ch.chapterNumber || '?'} - ${ch.title}` : `Глава ${ch.chapterNumber || '?'}`;
+            chaptersList = data.data.map(ch => {
+                const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
+                const chapterNum = ch.attributes.chapter || '?';
+                const chapterTitle = ch.attributes.title ? ` - ${ch.attributes.title}` : '';
                 return {
                     id: ch.id,
-                    title: title
+                    title: `${lang} Глава ${chapterNum}${chapterTitle}`
                 };
-            });
-
-            // Сортируем главы по номеру (если API не отсортировал)
-            chaptersList.sort((a, b) => {
-                const numA = parseFloat(a.title.replace(/[^0-9.]/g, '')) || 0;
-                const numB = parseFloat(b.title.replace(/[^0-9.]/g, '')) || 0;
-                return numA - numB;
             });
 
             chapterSelect.innerHTML = '';
@@ -253,16 +268,17 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
 
         try {
-            // Получение страниц главы: /manga/mangadex/read?chapterId={chapterId}
-            const response = await fetch(`${API_BASE}/read?chapterId=${chapterId}`);
+            const targetUrl = `${MANGADEX_API}/at-home/server/${chapterId}`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const serverData = await response.json();
 
-            // Consumet возвращает массив объектов { page, img }
-            const pages = data.pages || data;
-            
-            if (!pages || pages.length === 0) {
+            const baseUrl = serverData.baseUrl;
+            const hash = serverData.chapter.hash;
+            const pageFiles = serverData.chapter.data;
+
+            if (!pageFiles || pageFiles.length === 0) {
                 throw new Error("В главе нет страниц");
             }
 
@@ -272,9 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageData, index) => {
-                const imageUrl = pageData.img; // Ссылка на картинку
-
+            pageFiles.forEach((fileName, index) => {
+                const imageUrl = `${baseUrl}/data/${hash}/${fileName}`;
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
@@ -294,8 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.style.height = 'auto';
                 img.style.display = 'block';
                 img.loading = 'lazy';
-                // Важно для некоторых источников: отключаем referrer
-                img.referrerPolicy = 'no-referrer';
+                img.referrerPolicy = 'no-referrer'; // Важно для картинок MangaDex
 
                 pageBlock.appendChild(img);
                 reader.appendChild(pageBlock);
