@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zero-reader-v2';
+const CACHE_NAME = 'zero-reader-v3';
 const ASSETS = [
   'index.html',
   'style.css',
