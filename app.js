@@ -151,22 +151,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================== ОСНОВНАЯ ЛОГИКА API ====================
 
     // 1. ПОИСК МАНГИ
-       // Функция для умного поиска названия (на русском, английском или любом другом)
+         // Функция для поиска названия (сначала ищем русское, потом английское)
     function getMangaTitle(manga) {
         const attrs = manga.attributes;
-        if (attrs.title.ru) return attrs.title.ru;
-        if (attrs.title.en) return attrs.title.en;
-        const titleKeys = Object.keys(attrs.title);
-        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
         
+        // 1. В первую очередь ищем русское название в альтернативных названиях
         if (attrs.altTitles && attrs.altTitles.length > 0) {
             for (const alt of attrs.altTitles) {
                 if (alt.ru) return alt.ru;
-                if (alt.en) return alt.en;
-                const altKeys = Object.keys(alt);
-                if (altKeys.length > 0) return alt[altKeys[0]];
             }
         }
+        // 2. Если нет, смотрим в основном названии
+        if (attrs.title.ru) return attrs.title.ru;
+        
+        // 3. Если русского нигде нет, берем английское
+        if (attrs.title.en) return attrs.title.en;
+        
+        // 4. Если вообще ничего нет
+        const titleKeys = Object.keys(attrs.title);
+        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
         return 'Без названия';
     }
 
@@ -179,7 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art&order[relevance]=desc`;
+            // ВАЖНО: availableTranslatedLanguage[]=ru заставляет искать ТОЛЬКО манги с русским переводом
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art&availableTranslatedLanguage[]=ru&order[relevance]=desc`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -187,10 +191,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchResults.innerHTML = '';
             if (data.data.length === 0) {
-                searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
+                searchResults.innerHTML = '<div class="search-item">Манги с русским переводом не найдено</div>';
             } else {
                 data.data.forEach(manga => {
-                    const title = getMangaTitle(manga); // <-- Используем нашу новую функцию
+                    const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
                     item.textContent = title;
