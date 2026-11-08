@@ -239,10 +239,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // ВОТ ТУТ БЫЛ ТОТ САМЫЙ CHAPTERSLIST
+                        // Формируем список глав с пометками языка
             chaptersList = data.data.map(ch => {
                 const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
                 const chapterNum = ch.attributes.chapter || '?';
                 const chapterTitle = ch.attributes.title ? ` - ${ch.attributes.title}` : '';
+                
+                return {
+                    id: ch.id,
+                    title: `${lang} Глава ${chapterNum}${chapterTitle}`
+                };
+            });
                 
                 return {
                     id: ch.id,
