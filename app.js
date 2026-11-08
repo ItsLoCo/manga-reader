@@ -173,7 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Без названия';
     }
 
-    // 1. ПОИСК МАНГИ
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
@@ -182,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // ВАЖНО: availableTranslatedLanguage[]=ru заставляет искать ТОЛЬКО манги с русским переводом
-            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art&availableTranslatedLanguage[]=ru&order[relevance]=desc`;
+            // Убрали проблемный фильтр availableTranslatedLanguage
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art&order[relevance]=desc`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -191,9 +190,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             searchResults.innerHTML = '';
             if (data.data.length === 0) {
-                searchResults.innerHTML = '<div class="search-item">Манги с русским переводом не найдено</div>';
+                searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                data.data.forEach(manga => {
+                // Сортируем: сначала те, у кого есть русское название
+                const sortedManga = data.data.sort((a, b) => {
+                    const aHasRu = (a.attributes.altTitles?.some(t => t.ru) || a.attributes.title.ru) ? 1 : 0;
+                    const bHasRu = (b.attributes.altTitles?.some(t => t.ru) || b.attributes.title.ru) ? 1 : 0;
+                    return bHasRu - aHasRu; // Русские названия идут первыми
+                });
+
+                sortedManga.forEach(manga => {
                     const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
