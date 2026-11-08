@@ -160,7 +160,7 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
         searchResults.classList.remove('hidden');
         
         try {
-            const targetUrl = `${API_BASE}/v1/search/?query=${encodeURIComponent(query)}`;
+            const targetUrl = `https://api.remanga.org/api/search/?query=${encodeURIComponent(query)}`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
