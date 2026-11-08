@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- ЭЛЕМЕНТЫ ИНТЕРФЕЙСА ---
     const startScreen = document.getElementById('start-screen');
     const readerScreen = document.getElementById('reader-screen');
     const reader = document.getElementById('reader');
@@ -24,11 +25,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const autoscrollToggle = document.getElementById('autoscroll-toggle');
     const autoscrollSpeed = document.getElementById('autoscroll-speed');
 
+    // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
+    let currentMangaId = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
-
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
+    
+    // --- КОНСТАНТЫ API ---
+    // Рабочий CORS-прокси. MangaDex не отдаёт CORS-заголовки для сторонних сайтов[reference:3], поэтому все запросы к API идут через него.
+    const CORS_PROXY = 'https://corsproxy.io/?';
+    const MANGADEX_API = 'https://api.mangadex.org';
+
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
     function updateProgressIndicators() {
         const currentMode = scrollModeSelect.value;
@@ -79,16 +88,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (autoscrollInterval) cancelAnimationFrame(autoscrollInterval);
     }
 
-    reader.addEventListener('touchstart', () => { userInteracting = true; clearTimeout(userInteractionTimeout); }, { passive: true });
-    reader.addEventListener('touchend', () => { userInteractionTimeout = setTimeout(() => { userInteracting = false; }, 1500); }, { passive: true });
+    // --- СВАЙПЫ (ИСПРАВЛЕНО) ---
+    // Слушаем на reader-screen, а не на reader, чтобы #menu-trigger не блокировал жесты
+    function handleTouchStart(e) {
+        userInteracting = true; 
+        clearTimeout(userInteractionTimeout);
+        const t = e.changedTouches[0];
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+    }
+    function handleTouchEnd(e) {
+        userInteractionTimeout = setTimeout(() => { userInteracting = false; }, 1500);
+        const t = e.changedTouches[0];
+        touchEndX = t.clientX;
+        touchEndY = t.clientY;
+        handleTouchGestures();
+    }
 
-    autoscrollToggle.addEventListener('change', (e) => {
-        isAutoscrollActive = e.target.checked;
-        if (isAutoscrollActive) startAutoscroll(); else stopAutoscroll();
-    });
-
-    reader.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches.screenX; touchStartY = e.changedTouches.screenY; }, { passive: true });
-    reader.addEventListener('touchend', (e) => { touchEndX = e.changedTouches.screenX; touchEndY = e.changedTouches.screenY; handleTouchGestures(); }, { passive: true });
+    readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
+    readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
 
     function handleTouchGestures() {
         const diffX = touchStartX - touchEndX;
@@ -105,7 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function switchChapter(index) {
+    // --- ПЕРЕКЛЮЧЕНИЕ ГЛАВ (ИСПРАВЛЕНО) ---
+    async function switchChapter(index) {
         if (index < 0 || index >= chapterSelect.options.length) return;
         chapterSelect.selectedIndex = index;
         localStorage.setItem('reader_last_chapter', chapterSelect.value);
@@ -114,12 +133,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const wasAutoscroll = isAutoscrollActive;
         stopAutoscroll();
         
+        // Закрываем меню и панель навигации
+        closeSettings();
         navNavigationPanel.classList.add('nav-hidden');
-        settingsMenu.style.transform = 'translateY(100%)';
 
-        loadChapterPages(chapterSelect.value).then(() => { if (wasAutoscroll) setTimeout(startAutoscroll, 1000); });
+        await loadChapterPages(chapterSelect.value);
+        if (wasAutoscroll) setTimeout(startAutoscroll, 1000);
     }
 
+    // --- УПРАВЛЕНИЕ НАВИГАЦИЕЙ ---
     navTopBtn.addEventListener('click', () => { 
         reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); 
         localStorage.setItem('reader_last_position', 0); 
@@ -128,149 +150,279 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-     // 1. ПОЛУЧЕНИЕ СПИСКА РЕАЛЬНЫХ ГЛАВ НА РУССКОМ С MANGADEX
-    async function fetchChapters(mangaId) {
-        try {
-            // Запрашиваем структуру глав через стабильный CORS-агрегатор
-            const response = await fetch(`https://allorigins.win{encodeURIComponent('https://githubusercontent.com')}`);
-            const json = await response.json();
-            
-            // Генерируем список глав для выбранного тайтла
-            chaptersList = [
-                { id: "chapter-1", title: "Глава 1 - Пробуждение" },
-                { id: "chapter-2", title: "Глава 2 - Шаг в бездну" },
-                { id: "chapter-3", title: "Глава 3 - Безграничный режим" }
-            ];
-            
-            chapterSelect.innerHTML = '';
-            chaptersList.forEach(ch => { 
-                const opt = document.createElement('option'); 
-                opt.value = ch.id; 
-                opt.textContent = ch.title; 
-                chapterSelect.appendChild(opt); 
-            });
-            
-            startScreen.classList.add('hidden');
-            readerScreen.classList.remove('hidden');
+    // ==================== ОСНОВНАЯ ЛОГИКА API ====================
 
-            const savedCh = localStorage.getItem('reader_last_chapter');
-            if (savedCh && chaptersList.some(c => c.id === savedCh)) { 
-                chapterSelect.value = savedCh; 
-                loadChapterPages(savedCh); 
-            } else { 
-                switchChapter(0); 
-            }
-        } catch (err) { 
-            reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка загрузки списка глав</div>`; 
-        }
-    }
-   async function loadChapterPages(chapterId) {
-        reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Сборка безрамочной ленты...</div>`;
-        progressBar.style.width = '0%';
-        try {
-            reader.innerHTML = '';
-            const observer = new IntersectionObserver((entries) => { 
-                entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
-            }, { root: reader, threshold: 0.05 });
-            
-            // Генерируем 3 адаптивных фрейма высокого разрешения, которые не блокируются по CORS
-            for (let i = 1; i <= 3; i++) {
-                const pageBlock = document.createElement('div');
-                pageBlock.className = 'test-page-block';
-                pageBlock.style.width = '100vw';
-                pageBlock.style.height = '1400px'; 
-                pageBlock.style.display = 'flex';
-                pageBlock.style.flexDirection = 'column';
-                pageBlock.style.justifyContent = 'center';
-                pageBlock.style.alignItems = 'center';
-                // Фирменные темные тона для ночного чтения
-                pageBlock.style.background = i % 2 === 0 ? '#0d0d11' : '#14141c'; 
-                pageBlock.style.borderBottom = '2px solid #262636';
-                
-                pageBlock.style.opacity = '0';
-                pageBlock.style.transform = 'translate3d(0, 20px, 0)';
-                pageBlock.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                
-                pageBlock.innerHTML = `
-                    <h1 style="color: #8a2be2; font-size: 28px; margin-bottom: 10px; font-family: sans-serif; text-shadow: 0 0 10px rgba(138,43,226,0.4);">СТРАНИЦА ${i}</h1>
-                    <p style="color: #4e4e61; font-size: 15px; font-family: sans-serif;">Лента MangaPoisk готова к чтению</p>
-                `;
-                
-                reader.appendChild(pageBlock);
-                observer.observe(pageBlock);
-            }
-            
-            setTimeout(() => {
-                const blocks = document.querySelectorAll('.test-page-block');
-                blocks.forEach(b => { b.style.opacity = '1'; b.style.transform = 'translate3d(0, 0, 0)'; });
-            }, 50);
-            
-            reader.scrollTo(0, 0);
-            setTimeout(updateProgressIndicators, 100);
-        } catch (err) { reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка страниц.</div>`; }
-    }
-
+    // 1. ПОИСК МАНГИ (ИСПРАВЛЕНО - теперь реальный запрос к MangaDex API)
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
+        searchBtn.disabled = true;
         searchResults.innerHTML = "";
         searchResults.classList.remove('hidden');
+        
         try {
-            // Симулируем успешный ответ локального парсера
-            setTimeout(() => {
-                const item = document.createElement('div');
-                item.className = 'search-item';
-                // Красиво выводим то название, которое ввёл пользователь
-                item.textContent = query.trim() + " (MangaPoisk)";
-                item.addEventListener('click', () => {
-                    searchResults.classList.add('hidden');
-                    searchInput.value = "";
-                    fetchChapters("manga-poisik-id");
+            const url = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + '/manga')}?title=${encodeURIComponent(query)}&limit=10&includes[]=cover_art`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            searchResults.innerHTML = ''; // Очищаем на случай, если там что-то было
+            if (data.data.length === 0) {
+                searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
+            } else {
+                data.data.forEach(manga => {
+                    const title = manga.attributes.title.ru || manga.attributes.title.en || 'Без названия';
+                    const item = document.createElement('div');
+                    item.className = 'search-item';
+                    item.textContent = title;
+                    item.addEventListener('click', () => {
+                        searchResults.classList.add('hidden');
+                        searchInput.value = "";
+                        currentMangaId = manga.id;
+                        loadChaptersForManga(manga.id);
+                    });
+                    searchResults.appendChild(item);
                 });
-                searchResults.appendChild(item);
-                searchBtn.textContent = "Найти 🔍";
-            }, 400);
+            }
         } catch (err) { 
+            console.error("Search error:", err);
+            searchResults.innerHTML = '<div class="search-item" style="color: #ff5555;">Ошибка поиска. Проверьте соединение.</div>';
+        } finally {
             searchBtn.textContent = "Найти 🔍"; 
+            searchBtn.disabled = false;
         }
     }
-// --- УПРАВЛЕНИЕ ТАПАМИ И ИНТЕРФЕЙСОМ ---
-menuTrigger.addEventListener('click', () => {
-if (settingsMenu.style.transform === 'translateY(0%)') {
-settingsMenu.style.transform = 'translateY(100%)';
-} else {
-navNavigationPanel.classList.toggle('nav-hidden');
-}
-});
-navSettingsBtn.addEventListener('click', (e) => {
-e.stopPropagation();
-navNavigationPanel.classList.add('nav-hidden');
-settingsMenu.style.transform = 'translateY(0%)';
-});
-closeMenu.addEventListener('click', () => {
-settingsMenu.style.transform = 'translateY(100%)';
-navNavigationPanel.classList.add('nav-hidden');
-});
-let scrollTimeout;
-reader.addEventListener('scroll', () => {
-updateProgressIndicators();
-clearTimeout(scrollTimeout);
-scrollTimeout = setTimeout(() => {
-if (!isAutoscrollActive) {
-const mode = scrollModeSelect.value;
-localStorage.setItem('reader_last_position', mode === 'paged-horizontal' ? reader.scrollLeft : reader.scrollTop);
-}
-}, 150);
-});
-scrollModeSelect.addEventListener('change', (e) => { setScrollMode(e.target.value); localStorage.setItem('reader_scroll_mode', e.target.value); stopAutoscroll(); autoscrollToggle.checked = false; reader.scrollTo(0,0); });
-chapterSelect.addEventListener('change', (e) => { localStorage.setItem('reader_last_chapter', e.target.value); localStorage.setItem('reader_last_position', 0); stopAutoscroll(); autoscrollToggle.checked = false; loadChapterPages(e.target.value); });
-bgColorSelect.addEventListener('change', (e) => document.body.style.backgroundColor = e.target.value);
-searchBtn.addEventListener('click', () => searchManga(searchInput.value));
-searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchManga(searchInput.value); });
-function setScrollMode(mode) { reader.className = ''; if (mode === 'webtoon') reader.classList.add('mode-webtoon'); if (mode === 'paged-vertical') reader.classList.add('mode-paged-vertical'); if (mode === 'paged-horizontal') reader.classList.add('mode-paged-horizontal'); setTimeout(updateProgressIndicators, 50); }
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
-const savedMode = localStorage.getItem('reader_scroll_mode') || 'webtoon';
-scrollModeSelect.value = savedMode;
-setScrollMode(savedMode);
-settingsMenu.style.transform = 'translateY(100%)';
+
+    // 2. ЗАГРУЗКА СПИСКА ГЛАВ (НОВАЯ ФУНКЦИЯ)
+    async function loadChaptersForManga(mangaId) {
+        startScreen.classList.add('hidden');
+        readerScreen.classList.remove('hidden');
+        reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
+
+        try {
+            // Запрашиваем главы на русском (или английском, если русских нет), сортируем по порядку
+            const url = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + `/manga/${mangaId}/feed`)}?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            if (!data.data || data.data.length === 0) {
+                throw new Error("Главы не найдены");
+            }
+
+            chaptersList = data.data.map(ch => ({
+                id: ch.id,
+                title: ch.attributes.title || `Глава ${ch.attributes.chapter || '?'}`
+            }));
+
+            // Заполняем селект глав
+            chapterSelect.innerHTML = '';
+            chaptersList.forEach(ch => {
+                const opt = document.createElement('option');
+                opt.value = ch.id;
+                opt.textContent = ch.title;
+                chapterSelect.appendChild(opt);
+            });
+
+            // Восстанавливаем последнюю прочитанную главу или начинаем с первой
+            const savedCh = localStorage.getItem('reader_last_chapter');
+            let savedIndex = chaptersList.findIndex(c => c.id === savedCh);
+            if (savedIndex === -1) savedIndex = 0;
+
+            chapterSelect.selectedIndex = savedIndex;
+            await switchChapter(savedIndex); // switchChapter сам загрузит страницы
+
+        } catch (err) {
+            console.error("Chapters error:", err);
+            reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка загрузки глав: ${err.message}</div>`;
+        }
+    }
+
+    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ (ИСПРАВЛЕНО - используем at-home API)
+    async function loadChapterPages(chapterId) {
+        reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
+        progressBar.style.width = '0%';
+
+        try {
+            // Получаем метаданные для загрузки изображений
+            const serverUrl = `${CORS_PROXY}${encodeURIComponent(MANGADEX_API + `/at-home/server/${chapterId}`)}`;
+            const serverResponse = await fetch(serverUrl);
+            if (!serverResponse.ok) throw new Error(`HTTP ${serverResponse.status}`);
+            const serverData = await serverResponse.json();
+
+            const baseUrl = serverData.baseUrl;
+            const hash = serverData.chapter.hash;
+            const pageFiles = serverData.chapter.data; // Используем оригинальное качество
+
+            if (!pageFiles || pageFiles.length === 0) {
+                throw new Error("В главе нет страниц");
+            }
+
+            reader.innerHTML = ''; // Очищаем экран
+
+            const observer = new IntersectionObserver((entries) => { 
+                entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
+            }, { root: reader, threshold: 0.05 });
+
+            pageFiles.forEach((fileName, index) => {
+                // Собираем полный URL картинки согласно документации[reference:4]
+                // Формат: baseUrl / quality / hash / filename
+                const imageUrl = `${baseUrl}/data/${hash}/${fileName}`;
+
+                const pageBlock = document.createElement('div');
+                pageBlock.className = 'page-block';
+                pageBlock.style.width = '100vw';
+                pageBlock.style.display = 'flex';
+                pageBlock.style.justifyContent = 'center';
+                pageBlock.style.alignItems = 'flex-start';
+                pageBlock.style.background = '#0d0d11';
+                pageBlock.style.borderBottom = '2px solid #262636';
+                pageBlock.style.opacity = '0';
+                pageBlock.style.transition = 'opacity 0.4s ease';
+
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = `Страница ${index + 1}`;
+                img.style.width = '100%';
+                img.style.maxWidth = '100vw';
+                img.style.height = 'auto';
+                img.style.display = 'block';
+                // Важно: не отправляем заголовки авторизации при загрузке картинок[reference:5]
+                img.loading = 'lazy';
+
+                pageBlock.appendChild(img);
+                reader.appendChild(pageBlock);
+                observer.observe(pageBlock);
+
+                img.onload = () => {
+                    pageBlock.style.opacity = '1';
+                };
+            });
+
+            reader.scrollTo(0, 0);
+            setTimeout(updateProgressIndicators, 100);
+            setTimeout(() => restoreScrollPosition(), 50);
+
+        } catch (err) { 
+            console.error("Pages error:", err);
+            reader.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Ошибка загрузки страниц: ${err.message}</div>`; 
+        }
+    }
+
+    // --- ВОССТАНОВЛЕНИЕ ПОЗИЦИИ (НОВАЯ ФУНКЦИЯ) ---
+    function restoreScrollPosition() {
+        const pos = parseFloat(localStorage.getItem('reader_last_position') || '0');
+        if (pos > 0) {
+            const mode = scrollModeSelect.value;
+            if (mode === 'paged-horizontal') {
+                reader.scrollLeft = pos;
+            } else {
+                reader.scrollTop = pos;
+            }
+        }
+        updateProgressIndicators();
+    }
+
+    // ==================== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ====================
+
+    // --- МЕНЮ НАСТРОЕК (ИСПРАВЛЕНО - используем класс .hidden) ---
+    function openSettings() {
+        settingsMenu.classList.remove('hidden');
+        // Небольшая задержка, чтобы сработала CSS-транзиция
+        requestAnimationFrame(() => {
+            settingsMenu.style.transform = 'translateY(0%)';
+        });
+        navNavigationPanel.classList.add('nav-hidden');
+    }
+
+    function closeSettings() {
+        settingsMenu.style.transform = 'translateY(100%)';
+        // Снова скрываем после завершения анимации
+        setTimeout(() => {
+            settingsMenu.classList.add('hidden');
+        }, 250); 
+    }
+
+    menuTrigger.addEventListener('click', () => {
+        if (settingsMenu.classList.contains('hidden')) {
+            navNavigationPanel.classList.toggle('nav-hidden');
+        } else {
+            closeSettings();
+        }
+    });
+
+    navSettingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSettings();
+    });
+
+    closeMenu.addEventListener('click', closeSettings);
+
+    // --- СОХРАНЕНИЕ ПОЗИЦИИ ПРИ СКРОЛЛЕ ---
+    let scrollTimeout;
+    reader.addEventListener('scroll', () => {
+        updateProgressIndicators();
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            if (!isAutoscrollActive) {
+                const mode = scrollModeSelect.value;
+                localStorage.setItem('reader_last_position', mode === 'paged-horizontal' ? reader.scrollLeft : reader.scrollTop);
+            }
+        }, 150);
+    });
+
+    // --- СЛУШАТЕЛИ ИЗМЕНЕНИЙ НАСТРОЕК ---
+    scrollModeSelect.addEventListener('change', (e) => { 
+        setScrollMode(e.target.value); 
+        localStorage.setItem('reader_scroll_mode', e.target.value); 
+        stopAutoscroll(); 
+        autoscrollToggle.checked = false; 
+        reader.scrollTo(0,0); 
+    });
+
+    chapterSelect.addEventListener('change', (e) => { 
+        localStorage.setItem('reader_last_chapter', e.target.value); 
+        localStorage.setItem('reader_last_position', 0); 
+        stopAutoscroll(); 
+        autoscrollToggle.checked = false; 
+        loadChapterPages(e.target.value); 
+    });
+
+    bgColorSelect.addEventListener('change', (e) => {
+        // Меняем фон не только у body, но и у всех блоков страниц
+        document.body.style.backgroundColor = e.target.value;
+        document.querySelectorAll('.page-block').forEach(block => {
+            block.style.backgroundColor = e.target.value;
+        });
+    });
+
+    autoscrollToggle.addEventListener('change', (e) => {
+        isAutoscrollActive = e.target.checked;
+        if (isAutoscrollActive) startAutoscroll(); else stopAutoscroll();
+    });
+
+    searchBtn.addEventListener('click', () => searchManga(searchInput.value));
+    searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchManga(searchInput.value); });
+
+    // --- СМЕНА РЕЖИМА ПРОКРУТКИ (ИСПРАВЛЕНО - теперь меняет классы корректно) ---
+    function setScrollMode(mode) { 
+        // Удаляем все классы режимов
+        reader.classList.remove('mode-webtoon', 'mode-paged-vertical', 'mode-paged-horizontal');
+        // Добавляем нужный
+        reader.classList.add(`mode-${mode}`);
+        setTimeout(updateProgressIndicators, 50); 
+    }
+
+    // --- ИНИЦИАЛИЗАЦИЯ ---
+    if ('serviceWorker' in navigator) { 
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err)); 
+    }
+
+    // Восстанавливаем последний режим прокрутки
+    const savedMode = localStorage.getItem('reader_scroll_mode') || 'webtoon';
+    scrollModeSelect.value = savedMode;
+    setScrollMode(savedMode);
+
+    // Изначально меню настроек скрыто
+    closeSettings();
 });
