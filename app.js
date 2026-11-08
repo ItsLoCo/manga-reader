@@ -27,15 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
-    let currentMangaSlug = null; // В ReManga используется slug (текстовый идентификатор)
+    let currentMangaSlug = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ API REMANGA ---
-// Прямое подключение к ReManga, все запросы будут проходить через наш воркер
-const API_BASE = 'https://api.remanga.org/api';
-const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
+    const API_BASE = 'https://api.remanga.org/api';
+    const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -160,26 +159,29 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
         searchResults.classList.remove('hidden');
         
         try {
-            const targetUrl = `https://api.remanga.org/api/search/?query=${encodeURIComponent(query)}`;
+            // Используем стабильный эндпоинт поиска ReManga
+            const targetUrl = `${API_BASE}/search/?field=titles&count=10&page=1&query=${encodeURIComponent(query)}`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
             searchResults.innerHTML = '';
-            // API ReManga возвращает результаты в data.content
-            if (!data.content || data.content.length === 0) {
+            // API ReManga возвращает результаты в data.content (или data.results)
+            const results = data.content || data.results || [];
+            
+            if (results.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                data.content.forEach(manga => {
+                results.forEach(manga => {
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    // Название приходит в main_name, а slug - в dir
-                    item.textContent = manga.main_name || 'Без названия';
+                    item.textContent = manga.main_name || manga.name || 'Без названия';
                     
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        currentMangaSlug = manga.dir; // Сохраняем slug для запроса глав
+                        currentMangaSlug = manga.dir; // Сохраняем slug (dir)
                         loadChaptersForManga(manga.dir);
                     });
                     searchResults.appendChild(item);
@@ -201,20 +203,19 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Получаем информацию о тайтле, включая список глав
-            const response = await fetch(`${API_BASE}/titles/${mangaSlug}/`);
+            // Получаем информацию о тайтле по его dir (slug)
+            const targetUrl = `${API_BASE}/titles/${mangaSlug}/`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            // В ReManga главы могут быть в data.chapters
             const chaptersData = data.chapters || [];
             
             if (chaptersData.length === 0) {
                 throw new Error("Главы не найдены");
             }
 
-            // Формируем список глав. У ReManga главы имеют числовой id и номер (chapter)
             chaptersList = chaptersData.map(ch => ({
                 id: ch.id,
                 title: `Глава ${ch.chapter || '?'}`
@@ -235,7 +236,6 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
                 chapterSelect.appendChild(opt);
             });
 
-            // Восстанавливаем последнюю прочитанную главу или начинаем с первой
             const savedChId = localStorage.getItem('reader_last_chapter');
             let savedIndex = chaptersList.findIndex(c => c.id.toString() === savedChId);
             if (savedIndex === -1) savedIndex = 0;
@@ -255,13 +255,13 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
         progressBar.style.width = '0%';
 
         try {
-            // Получаем данные страниц по ID главы
-            const response = await fetch(`${API_BASE}/chapter/?id=${chapterId}`);
+            // Получаем страницы главы по её ID
+            const targetUrl = `${API_BASE}/chapter/?id=${chapterId}`;
+            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            // ReManga возвращает массив страниц в data.pages
             const pages = data.pages || [];
             
             if (pages.length === 0) {
@@ -275,7 +275,6 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
             }, { root: reader, threshold: 0.05 });
 
             pages.forEach((pageData, index) => {
-                // В ReManga ссылка на картинку лежит в pageData.link
                 const imageUrl = pageData.link || pageData.img; 
 
                 const pageBlock = document.createElement('div');
@@ -297,7 +296,7 @@ const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
                 img.style.height = 'auto';
                 img.style.display = 'block';
                 img.loading = 'lazy';
-                img.referrerPolicy = 'no-referrer'; // Отключаем referrer для картинок
+                img.referrerPolicy = 'no-referrer';
 
                 pageBlock.appendChild(img);
                 reader.appendChild(pageBlock);
