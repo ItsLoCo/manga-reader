@@ -27,14 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
+    let currentMangaUrl = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
-    // --- КОНСТАНТЫ API (REMANGA) ---
-    // Используем публичный CORS-прокси для обхода блокировок
-    const API_BASE = 'https://api.mangalib.me/api';
-const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
+    // --- КОНСТАНТЫ ---
+    // Твой воркер, который теперь работает как парсер
+    const WORKER_URL = 'https://empty-firefly-874a.niko-rad3.workers.dev/';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -148,9 +148,9 @@ const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ОСНОВНАЯ ЛОГИКА REMANGA API ====================
+    // ==================== ЛОГИКА MANGALIB ====================
 
-    // 1. ПОИСК МАНГИ
+    // 1. ПОИСК
     async function searchManga(query) {
         if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
@@ -159,74 +159,52 @@ const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
         searchResults.classList.remove('hidden');
         
         try {
-            // Ищем через публичный API поиска ReManga
-            const targetUrl = `${API_BASE}/search/?field=titles&count=15&page=1&query=${encodeURIComponent(query)}`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
+            const searchUrl = `https://mangalib.me/ru/search?q=${encodeURIComponent(query)}`;
+            const response = await fetch(`${WORKER_URL}?url=${encodeURIComponent(searchUrl)}&action=search`);
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const results = await response.json();
 
             searchResults.innerHTML = '';
-            // API ReManga обычно возвращает результаты в content
-            const results = data.content || data.results || [];
-            
             if (results.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
                 results.forEach(manga => {
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    item.textContent = manga.main_name || manga.name || 'Без названия';
-                    
+                    item.textContent = manga.title;
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        loadChaptersForManga(manga.dir);
+                        currentMangaUrl = manga.url;
+                        loadChaptersForManga(manga.url);
                     });
                     searchResults.appendChild(item);
                 });
             }
         } catch (err) { 
             console.error("Search error:", err);
-            searchResults.innerHTML = `<div class="search-item" style="color: #ff5555; font-size: 12px; word-break: break-all;">Ошибка: ${err.message}</div>`;
+            searchResults.innerHTML = `<div class="search-item" style="color: #ff5555; font-size: 12px;">Ошибка: ${err.message}</div>`;
         } finally {
             searchBtn.textContent = "Найти 🔍"; 
             searchBtn.disabled = false;
         }
     }
 
-    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
-    async function loadChaptersForManga(mangaSlug) {
+    // 2. ЗАГРУЗКА ГЛАВ
+    async function loadChaptersForManga(mangaUrl) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Получаем информацию о тайтле по его dir (slug)
-            const targetUrl = `${API_BASE}/titles/${mangaSlug}/`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
-            
+            const response = await fetch(`${WORKER_URL}?url=${encodeURIComponent(mangaUrl)}&action=chapters`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const chapters = await response.json();
 
-            const chaptersData = data.chapters || [];
-            
-            if (chaptersData.length === 0) {
-                throw new Error("Главы не найдены");
-            }
+            if (chapters.length === 0) throw new Error("Главы не найдены");
 
-            chaptersList = chaptersData.map(ch => ({
-                id: ch.id,
-                title: `Глава ${ch.chapter || '?'}`
-            }));
-
-            // Сортируем по номеру главы
-            chaptersList.sort((a, b) => {
-                const numA = parseFloat(a.title.replace(/[^0-9.]/g, '')) || 0;
-                const numB = parseFloat(b.title.replace(/[^0-9.]/g, '')) || 0;
-                return numA - numB;
-            });
-
+            chaptersList = chapters;
             chapterSelect.innerHTML = '';
             chaptersList.forEach(ch => {
                 const opt = document.createElement('option');
@@ -235,8 +213,8 @@ const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
                 chapterSelect.appendChild(opt);
             });
 
-            const savedChId = localStorage.getItem('reader_last_chapter');
-            let savedIndex = chaptersList.findIndex(c => c.id.toString() === savedChId);
+            const savedCh = localStorage.getItem('reader_last_chapter');
+            let savedIndex = chaptersList.findIndex(c => c.id === savedCh);
             if (savedIndex === -1) savedIndex = 0;
 
             chapterSelect.selectedIndex = savedIndex;
@@ -248,34 +226,25 @@ const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
         }
     }
 
-    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ
+    // 3. ЗАГРУЗКА СТРАНИЦ
     async function loadChapterPages(chapterId) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            // Получаем страницы главы по её ID
-            const targetUrl = `${API_BASE}/chapter/?id=${chapterId}`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
-            
+            const chapterUrl = `${currentMangaUrl}/${chapterId}`;
+            const response = await fetch(`${WORKER_URL}?url=${encodeURIComponent(chapterUrl)}&action=pages`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const pages = await response.json();
 
-            const pages = data.pages || [];
-            
-            if (pages.length === 0) {
-                throw new Error("В главе нет страниц");
-            }
+            if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
 
             reader.innerHTML = '';
-
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageData, index) => {
-                const imageUrl = pageData.link || pageData.img; 
-
+            pages.forEach((imageUrl, index) => {
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
@@ -301,9 +270,7 @@ const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
                 reader.appendChild(pageBlock);
                 observer.observe(pageBlock);
 
-                img.onload = () => {
-                    pageBlock.style.opacity = '1';
-                };
+                img.onload = () => { pageBlock.style.opacity = '1'; };
             });
 
             reader.scrollTo(0, 0);
