@@ -33,8 +33,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    // Твой воркер, который теперь работает как парсер
     const WORKER_URL = 'https://empty-firefly-874a.niko-rad3.workers.dev/';
+    const MANGA_POISK_BASE = 'https://mangapoisk.io';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ЛОГИКА MANGALIB ====================
+    // ==================== ЛОГИКА MANGAPOISK ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            const searchUrl = `https://mangalib.me/ru/search?q=${encodeURIComponent(query)}`;
+            const searchUrl = `${MANGA_POISK_BASE}/search?q=${encodeURIComponent(query)}`;
             const response = await fetch(`${WORKER_URL}?url=${encodeURIComponent(searchUrl)}&action=search`);
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -232,7 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
 
         try {
-            const chapterUrl = `${currentMangaUrl}/${chapterId}`;
+            const chapterUrl = chapterId.startsWith('http') ? chapterId : `${MANGA_POISK_BASE}${chapterId}`;
+            
             const response = await fetch(`${WORKER_URL}?url=${encodeURIComponent(chapterUrl)}&action=pages`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const pages = await response.json();
