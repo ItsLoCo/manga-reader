@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- КОНСТАНТЫ API (REMANGA) ---
     // Используем публичный CORS-прокси для обхода блокировок
-    const CORS_PROXY = 'https://corsproxy.io/?';
+    const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
     const API_BASE = 'https://api.remanga.org/api';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
