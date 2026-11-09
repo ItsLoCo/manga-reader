@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ API ---
-    const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
+    const CORS_PROXY = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=';
     const MANGADEX_API = 'https://api.mangadex.org';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
