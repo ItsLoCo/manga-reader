@@ -27,14 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
-    let currentMangaSlug = null;
+    let currentMangaId = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
-    // --- КОНСТАНТЫ API REMANGA ---
-    const API_BASE = 'https://api.remanga.org/api';
+    // --- КОНСТАНТЫ API ---
     const CORS_PROXY = 'https://tight-sea-1b3c.niko-rad3.workers.dev/?url=';
+    const MANGADEX_API = 'https://api.mangadex.org';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -125,8 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function switchChapter(index) {
         if (index < 0 || index >= chapterSelect.options.length) return;
         chapterSelect.selectedIndex = index;
-        const chapterId = chapterSelect.value;
-        localStorage.setItem('reader_last_chapter', chapterId);
+        localStorage.setItem('reader_last_chapter', chapterSelect.value);
         localStorage.setItem('reader_last_position', 0);
         
         const wasAutoscroll = isAutoscrollActive;
@@ -135,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeSettings();
         navNavigationPanel.classList.add('nav-hidden');
 
-        await loadChapterPages(chapterId);
+        await loadChapterPages(chapterSelect.value);
         if (wasAutoscroll) setTimeout(startAutoscroll, 1000);
     }
 
@@ -148,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ОСНОВНАЯ ЛОГИКА REMANGA API ====================
+    // ==================== ОСНОВНАЯ ЛОГИКА MANGADEX API ====================
 
     // 1. ПОИСК МАНГИ
     async function searchManga(query) {
@@ -159,30 +158,30 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // Используем стабильный эндпоинт поиска ReManga
-            const targetUrl = `${API_BASE}/search/?field=titles&count=10&page=1&query=${query}`;
+            const targetUrl = `${MANGADEX_API}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Код ${response.status}: ${errorText.substring(0, 50)}`);
+            }
+            
             const data = await response.json();
 
             searchResults.innerHTML = '';
-            // API ReManga возвращает результаты в data.content (или data.results)
-            const results = data.content || data.results || [];
-            
-            if (results.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                results.forEach(manga => {
+                data.data.forEach(manga => {
+                    const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    item.textContent = manga.main_name || manga.name || 'Без названия';
-                    
+                    item.textContent = title;
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        currentMangaSlug = manga.dir; // Сохраняем slug (dir)
-                        loadChaptersForManga(manga.dir);
+                        currentMangaId = manga.id;
+                        loadChaptersForManga(manga.id);
                     });
                     searchResults.appendChild(item);
                 });
@@ -196,36 +195,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Вспомогательная функция для поиска названия
+    function getMangaTitle(manga) {
+        const attrs = manga.attributes;
+        if (attrs.title.ru) return attrs.title.ru;
+        if (attrs.title.en) return attrs.title.en;
+        const titleKeys = Object.keys(attrs.title);
+        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
+        if (attrs.altTitles && attrs.altTitles.length > 0) {
+            for (const alt of attrs.altTitles) {
+                if (alt.ru) return alt.ru;
+                if (alt.en) return alt.en;
+                const altKeys = Object.keys(alt);
+                if (altKeys.length > 0) return alt[altKeys[0]];
+            }
+        }
+        return 'Без названия';
+    }
+
     // 2. ЗАГРУЗКА СПИСКА ГЛАВ
-    async function loadChaptersForManga(mangaSlug) {
+    async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Получаем информацию о тайтле по его dir (slug)
-            const targetUrl = `${API_BASE}/titles/${mangaSlug}/`;
+            const targetUrl = `${MANGADEX_API}/manga/${mangaId}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            const chaptersData = data.chapters || [];
-            
-            if (chaptersData.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 throw new Error("Главы не найдены");
             }
 
-            chaptersList = chaptersData.map(ch => ({
-                id: ch.id,
-                title: `Глава ${ch.chapter || '?'}`
-            }));
-
-            // Сортируем по номеру главы
-            chaptersList.sort((a, b) => {
-                const numA = parseFloat(a.title.replace(/[^0-9.]/g, '')) || 0;
-                const numB = parseFloat(b.title.replace(/[^0-9.]/g, '')) || 0;
-                return numA - numB;
+            chaptersList = data.data.map(ch => {
+                const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
+                const chapterNum = ch.attributes.chapter || '?';
+                const chapterTitle = ch.attributes.title ? ` - ${ch.attributes.title}` : '';
+                return {
+                    id: ch.id,
+                    title: `${lang} Глава ${chapterNum}${chapterTitle}`
+                };
             });
 
             chapterSelect.innerHTML = '';
@@ -236,8 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 chapterSelect.appendChild(opt);
             });
 
-            const savedChId = localStorage.getItem('reader_last_chapter');
-            let savedIndex = chaptersList.findIndex(c => c.id.toString() === savedChId);
+            const savedCh = localStorage.getItem('reader_last_chapter');
+            let savedIndex = chaptersList.findIndex(c => c.id === savedCh);
             if (savedIndex === -1) savedIndex = 0;
 
             chapterSelect.selectedIndex = savedIndex;
@@ -255,16 +267,17 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
 
         try {
-            // Получаем страницы главы по её ID
-            const targetUrl = `${API_BASE}/chapter/?id=${chapterId}`;
+            const targetUrl = `${MANGADEX_API}/at-home/server/${chapterId}`;
             const response = await fetch(CORS_PROXY + encodeURIComponent(targetUrl));
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const serverData = await response.json();
 
-            const pages = data.pages || [];
-            
-            if (pages.length === 0) {
+            const baseUrl = serverData.baseUrl;
+            const hash = serverData.chapter.hash;
+            const pageFiles = serverData.chapter.data;
+
+            if (!pageFiles || pageFiles.length === 0) {
                 throw new Error("В главе нет страниц");
             }
 
@@ -274,9 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageData, index) => {
-                const imageUrl = pageData.link || pageData.img; 
-
+            pageFiles.forEach((fileName, index) => {
+                const imageUrl = `${baseUrl}/data/${hash}/${fileName}`;
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
