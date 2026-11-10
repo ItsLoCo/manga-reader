@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
-    const WORKER_URL = 'https://api.locomanga.pro';
+    const WORKER_URL = 'https://api.locomanga.pro/';
     const startScreen = $('start-screen'), readerScreen = $('reader-screen'), reader = $('reader');
     const settingsMenu = $('settings-menu'), navPanel = $('reader-navigation'), chapterSelect = $('chapter-select');
     const progressBar = $('progress-bar'), searchInput = $('search-input'), toggle = $('autoscroll-toggle');
