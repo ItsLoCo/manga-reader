@@ -281,6 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
             : (x.empty?.ru || x.empty?.en) ? 'Главы этого тайтла удалены с MangaDex (так бывает у лицензированных тайтлов), читать их здесь нельзя.'
             : 'Для этого тайтла нет глав, доступных для чтения.';
         w.append(t);
+        if (x.total !== undefined && x.total !== null) {
+            const s = document.createElement('p'); s.style.fontSize = '12px'; s.textContent = 'Ответ MangaDex: записей о главах — ' + x.total; w.append(s);
+        }
         if (/^https?:\/\//.test(x.url || '')) {
             const l = document.createElement('a'); l.href = x.url; l.target = '_blank'; l.rel = 'noopener noreferrer';
             l.className = 'pill'; l.textContent = 'Открыть на внешнем сайте'; w.append(l);
