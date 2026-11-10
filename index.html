@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -20,9 +20,14 @@
         </header>
         <div class="main-search-box">
             <input type="text" id="search-input" placeholder="Название манги или манхвы...">
+            <button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
             <button id="search-btn">Найти</button>
         </div>
-        <div id="search-results" class="hidden"></div>
+        <div id="results" class="hidden">
+            <div class="rh"><span id="rcount"></span><button id="rclose" class="pill">Закрыть</button></div>
+            <div id="grid" class="grid"></div>
+            <button id="more" class="pill more hidden">Показать ещё</button>
+        </div>
         <div id="home"></div>
         <footer class="by">by LoCo</footer>
     </div>
@@ -31,7 +36,7 @@
         <button id="d-back" class="pill">← Назад</button>
         <div class="d-head">
             <img id="d-cover" alt="">
-            <div><h2 id="d-title"></h2><p id="d-meta"></p><div id="d-tags"></div></div>
+            <div><h2 id="d-title"></h2><p id="d-meta"></p><p id="d-ru" class="d-ru"></p><div id="d-tags"></div></div>
         </div>
         <p id="d-desc"></p>
         <button id="d-read">Читать</button>
@@ -87,6 +92,13 @@
         </div>
         <button id="close-menu">Вернуться к чтению</button>
         <button id="home-btn" class="ghost">На главную</button>
+    </div>
+
+    <div id="sheet-bg" class="hidden"></div>
+    <div id="filter-sheet">
+        <div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
+        <div id="fs-body"></div>
+        <div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
     </div>
 
     <div id="auth-modal" class="hidden">
