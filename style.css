@@ -147,3 +147,28 @@ button.ghost { background:transparent !important; border:1px solid var(--line) !
 
 .msg p { line-height:1.5; margin-bottom:6px; }
 .msg .pill { display:inline-block; margin:12px 6px 0; text-decoration:none; }
+
+/* ---- Читалка: верхняя плашка и плавающая панель ---- */
+#reader-top { position:fixed; top:0; left:0; right:0; z-index:15; display:flex; align-items:center; gap:10px; cursor:pointer;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 12px 10px;
+  background:linear-gradient(180deg, rgba(0,6,20,.88), rgba(0,6,20,.6));
+  backdrop-filter:blur(22px) saturate(140%); -webkit-backdrop-filter:blur(22px) saturate(140%);
+  border-bottom:1px solid rgba(120,160,255,.14); transition:transform .3s cubic-bezier(.25,1,.5,1); }
+#reader-top.nav-hidden { transform:translateY(-100%); }
+#reader-top svg { width:26px; height:26px; flex-shrink:0; fill:none; stroke:var(--blue); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.rt-text { min-width:0; flex:1; }
+#rt-title { font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#rt-chap { font-size:12px; color:#6aa2ff; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+#reader-navigation { left:0; right:0; width:max-content; margin:0 auto; justify-content:center; gap:6px; padding:8px 10px;
+  bottom:calc(14px + env(safe-area-inset-bottom)); border:1px solid rgba(120,160,255,.18); border-radius:32px;
+  background:rgba(6,12,26,.62); backdrop-filter:blur(26px) saturate(150%); -webkit-backdrop-filter:blur(26px) saturate(150%);
+  box-shadow:0 10px 34px rgba(0,0,0,.55), 0 0 26px rgba(47,123,255,.12); }
+#reader-navigation.nav-hidden { transform:translateY(calc(100% + 40px)); }
+.nav-btn-mini { width:50px; height:50px; background:transparent; border:none; color:#cfe0ff; border-radius:50%; transition:transform .12s, background .2s; }
+.nav-btn-mini svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round; }
+.nav-btn-mini:active { transform:scale(.88); background:rgba(47,123,255,.22); }
+.nav-btn-mini:disabled { opacity:.22; }
+.nav-btn-mini.style-gear { width:54px; height:54px; margin:0 4px; color:#fff; border:none;
+  background:linear-gradient(145deg, #4b8cff, #1b58d1); box-shadow:0 4px 18px rgba(47,123,255,.55), inset 0 1px 0 rgba(255,255,255,.25); }
+.nav-btn-mini.style-gear:active { background:linear-gradient(145deg, #3f7de8, #174bb5); }
