@@ -10,8 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
         set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
     };
-    let history = ls.get('rd_hist', {}), token = ls.get('rd_token', ''), user = ls.get('rd_user', '');
-    let manga = null, chapters = [], curIdx = 0, restoring = false, restoreTimer, contRow;
+    let lib = ls.get('rd_lib', {}), history = ls.get('rd_hist', {}), token = ls.get('rd_token', ''), user = ls.get('rd_user', '');
+    let manga = null, chapters = [], curIdx = 0, restoring = false, restoreTimer, contRow, planRow, doneRow, dm = null;
     let auto = false, raf = 0, fpos = 0, touching = false, touchTimer, sx = 0, sy = 0, st, syncT;
 
     // ---------- API ----------
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function syncNow() {
         if (!token) return;
-        try { const d = await post('sync', { history }); history = d.history; ls.set('rd_hist', history); }
+        try { const d = await post('sync', { history, lib }); history = d.history; lib = d.lib; ls.set('rd_hist', history); ls.set('rd_lib', lib); }
         catch (e) { if (/войти/i.test(e.message)) logout(); }
     }
 
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const d = await post(kind, { username: $('auth-user').value.trim(), password: $('auth-pass').value });
             token = d.token; user = d.username; ls.set('rd_token', token); ls.set('rd_user', user);
             $('auth-modal').classList.add('hidden'); $('auth-pass').value = ''; m.textContent = '';
-            renderAuth(); await syncNow(); renderContinue();
+            renderAuth(); await syncNow(); renderContinue(); renderLists();
         } catch (e) { m.textContent = e.message; }
     }
     $('auth-btn').onclick = () => {
@@ -64,14 +64,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Главная ----------
     const norm = x => ({ id: x.url, title: x.title, cover: x.cover });
-    function card(m, sub) {
+    const proxy = u => WORKER_URL + '?action=img&url=' + encodeURIComponent(u);
+    function setCover(i, url) {
+        i.onerror = null;
+        if (!url) { i.removeAttribute('src'); return; }
+        i.src = proxy(url); i.onerror = () => { i.onerror = null; i.src = url; };
+    }
+    function card(m, sub, direct) {
         const d = document.createElement('div'); d.className = 'card';
         const i = new Image(); i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.alt = '';
-        if (m.cover) i.src = m.cover;
+        setCover(i, m.cover);
         const p = document.createElement('p'); p.textContent = m.title;
         d.append(i, p);
         if (sub) { const s = document.createElement('small'); s.textContent = sub; d.append(s); }
-        d.onclick = () => openManga({ id: m.id, title: m.title, cover: m.cover });
+        d.onclick = () => { const x = { id: m.id, title: m.title, cover: m.cover }; if (direct) openManga(x); else showDetail(x); };
         return d;
     }
     function section(title) {
@@ -82,23 +88,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function renderContinue() {
         if (!contRow) return;
-        const items = Object.values(history).sort((a, b) => b.ts - a.ts).slice(0, 12);
+        const items = Object.values(history).filter(h => lib[h.id]?.st !== 'done').sort((a, b) => b.ts - a.ts).slice(0, 12);
         contRow.parentNode.classList.toggle('hidden', !items.length);
         contRow.textContent = '';
-        items.forEach(h => contRow.append(card(h, h.chTitle)));
+        items.forEach(h => contRow.append(card(h, h.chTitle, true)));
+    }
+    function renderLists() {
+        [[planRow, 'plan'], [doneRow, 'done']].forEach(([row, st]) => {
+            if (!row) return;
+            const items = Object.values(lib).filter(l => l.st === st).sort((a, b) => b.ts - a.ts);
+            row.parentNode.classList.toggle('hidden', !items.length);
+            row.textContent = '';
+            items.forEach(l => row.append(card(l)));
+        });
     }
     function loadHome() {
         $('home').innerHTML = '';
-        contRow = section('Продолжить чтение'); renderContinue();
+        contRow = section('Продолжить чтение'); planRow = section('Хочу прочитать'); renderContinue();
         [['updated', 'Обновления'], ['top', 'Рекомендуем'], ['popular', 'Популярное'], ['new', 'Новинки']].forEach(async ([type, title]) => {
             const row = section(title); row.textContent = 'Загрузка…';
             try {
                 const d = await call({ action: 'feed', type });
                 row.textContent = '';
-                d.entries.forEach(x => row.append(card(norm(x))));
+                // прочитанное не показываем в рекомендациях, популярном и новинках
+                d.entries.filter(x => type === 'updated' || lib[x.url]?.st !== 'done').forEach(x => row.append(card(norm(x))));
             } catch (e) { row.textContent = 'Не удалось загрузить: ' + e.message; }
         });
+        doneRow = section('Прочитано'); renderLists();
     }
+
+    // ---------- Страница тайтла ----------
+    const detail = $('detail-screen');
+    function renderDetailBtns() {
+        const st = lib[dm.id]?.st || '', h = history[dm.id];
+        $('d-read').textContent = h ? 'Продолжить: ' + h.chTitle : 'Читать';
+        $('d-plan').textContent = st === 'plan' ? '✓ В списке' : 'Хочу прочитать';
+        $('d-done').textContent = st === 'done' ? '✓ Прочитано' : 'Прочитано';
+        $('d-plan').classList.toggle('on', st === 'plan'); $('d-done').classList.toggle('on', st === 'done');
+    }
+    function setStatus(st) {
+        const cur = lib[dm.id]?.st || '';
+        lib[dm.id] = { id: dm.id, title: dm.title, cover: dm.cover, st: cur === st ? '' : st, ts: Date.now() };
+        ls.set('rd_lib', lib); renderDetailBtns(); renderLists(); renderContinue();
+        if (token) { clearTimeout(syncT); syncT = setTimeout(syncNow, 1500); }
+    }
+    async function showDetail(m) {
+        dm = m; startScreen.classList.add('hidden'); detail.classList.remove('hidden'); detail.scrollTop = 0;
+        $('d-title').textContent = m.title; setCover($('d-cover'), m.cover);
+        $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
+        renderDetailBtns();
+        try {
+            const d = await call({ action: 'info', id: m.id });
+            if (dm !== m) return;
+            $('d-desc').textContent = d.description || 'Описание отсутствует.';
+            $('d-meta').textContent = [d.status, d.year].filter(Boolean).join(', ');
+            d.tags.forEach(t => { const s = document.createElement('span'); s.textContent = t; $('d-tags').append(s); });
+        } catch (e) { if (dm === m) $('d-desc').textContent = 'Не удалось загрузить описание: ' + e.message; }
+    }
+    $('d-back').onclick = () => { detail.classList.add('hidden'); startScreen.classList.remove('hidden'); renderContinue(); renderLists(); };
+    $('d-read').onclick = () => { detail.classList.add('hidden'); openManga(dm); };
+    $('d-plan').onclick = () => setStatus('plan');
+    $('d-done').onclick = () => setStatus('done');
+
     async function search(q) {
         q = q.trim(); if (!q) return;
         const box = $('search-results');
@@ -154,11 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const b = document.createElement('div'); b.className = 'page-block';
                 const img = new Image(); img.alt = 'Страница ' + (n + 1); img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
                 img.onload = () => b.classList.add('ok');
+                let direct = false;
                 img.onerror = () => {
+                    if (!direct) { direct = true; img.src = p.url; return; }
                     b.className = 'page-block err'; b.textContent = `Не загрузилась стр. ${n + 1}. Нажми, чтобы повторить`;
-                    b.onclick = ev => { ev.stopPropagation(); b.onclick = null; b.className = 'page-block'; b.textContent = ''; b.append(img); img.src = p.url; };
+                    b.onclick = ev => { ev.stopPropagation(); b.onclick = null; b.className = 'page-block'; b.textContent = ''; b.append(img); direct = false; img.src = proxy(p.url); };
                 };
-                img.src = p.url; b.append(img); reader.append(b);
+                img.src = proxy(p.url); b.append(img); reader.append(b);
             });
         } catch (e) { msg('Ошибка загрузки страниц: ' + e.message, true); }
     }
@@ -257,5 +310,5 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedMode = ls.get('rd_mode', 'webtoon'); $('scroll-mode').value = savedMode; setMode(savedMode);
     const savedBg = ls.get('rd_bg', '#000000'); $('bg-color').value = savedBg; setBg(savedBg);
     renderAuth(); loadHome();
-    if (token) syncNow().then(renderContinue);
+    if (token) syncNow().then(() => { renderContinue(); renderLists(); });
 });
