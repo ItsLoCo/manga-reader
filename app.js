@@ -27,13 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
-    let currentMangaSlug = null;
+    let currentSourceId = null;
+    let currentMangaUrl = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    const API_BASE = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=' + encodeURIComponent('https://api.comick.io');
+    const WORKER_URL = 'https://empty-firefly-874a.niko-rad3.workers.dev/';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ЛОГИКА COMICK ====================
+    // ==================== ЛОГИКА ЧЕРЕЗ ВОРКЕР ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
@@ -158,23 +159,25 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            const response = await fetch(`${API_BASE}/v1.0/search?q=${encodeURIComponent(query)}&limit=15`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const response = await fetch(`${WORKER_URL}?action=search&query=${encodeURIComponent(query)}`);
             const data = await response.json();
 
+            if (data.error) throw new Error(data.error);
+
             searchResults.innerHTML = '';
-            if (!data || data.length === 0) {
+            if (!data.entries || data.entries.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                data.forEach(manga => {
+                currentSourceId = data.sourceId;
+                data.entries.forEach(manga => {
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    item.textContent = manga.title || manga.slug;
+                    item.textContent = manga.title || 'Без названия';
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        currentMangaSlug = manga.slug;
-                        loadChaptersForManga(manga.slug);
+                        currentMangaUrl = manga.url;
+                        loadChaptersForManga(manga.url);
                     });
                     searchResults.appendChild(item);
                 });
@@ -189,23 +192,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 2. ЗАГРУЗКА ГЛАВ
-    async function loadChaptersForManga(slug) {
+    async function loadChaptersForManga(mangaUrl) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            const response = await fetch(`${API_BASE}/v1.0/comic/${slug}/chapters?lang=ru`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const response = await fetch(`${WORKER_URL}?action=details&sourceId=${currentSourceId}&mangaUrl=${encodeURIComponent(mangaUrl)}`);
+            const chapters = await response.json();
 
-            if (!data || !data.chapters || data.chapters.length === 0) {
-                throw new Error("Русские главы не найдены");
-            }
+            if (chapters.error) throw new Error(chapters.error);
+            if (!chapters || chapters.length === 0) throw new Error("Главы не найдены");
 
-            chaptersList = data.chapters.map(ch => ({
-                id: ch.hid,
-                title: `Глава ${ch.chap || '?'}`
+            chaptersList = chapters.map(ch => ({
+                id: ch.url,
+                title: `${ch.title || 'Глава'} ${ch.number || '?'}`
             }));
 
             chapterSelect.innerHTML = '';
@@ -230,28 +231,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 3. ЗАГРУЗКА СТРАНИЦ
-    async function loadChapterPages(chapterId) {
+    async function loadChapterPages(chapterUrl) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            const response = await fetch(`${API_BASE}/v1.0/chapter/${chapterId}?tachiyomi=true`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const response = await fetch(`${WORKER_URL}?action=pages&sourceId=${currentSourceId}&chapterUrl=${encodeURIComponent(chapterUrl)}`);
+            const pages = await response.json();
 
-            const pages = data.chapter.images;
+            if (pages.error) throw new Error(pages.error);
             if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
-
-            const baseUrl = 'https://meo.comick.pictures/';
 
             reader.innerHTML = '';
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageData, index) => {
-                const imageUrl = baseUrl + pageData.b2key + '.' + pageData.name.split('.').pop();
-
+            pages.forEach((imageUrl, index) => {
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
