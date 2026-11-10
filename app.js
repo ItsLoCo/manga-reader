@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
     const WORKER_URL = 'https://api.locomanga.pro/';
-    const startScreen = $('start-screen'), readerScreen = $('reader-screen'), reader = $('reader');
+    const startScreen = $('start-screen'), readerScreen = $('reader-screen'), reader = $('reader'), readerTop = $('reader-top');
     const settingsMenu = $('settings-menu'), navPanel = $('reader-navigation'), chapterSelect = $('chapter-select');
     const progressBar = $('progress-bar'), searchInput = $('search-input'), toggle = $('autoscroll-toggle');
     const mode = () => $('scroll-mode').value;
@@ -13,6 +13,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let lib = ls.get('rd_lib', {}), history = ls.get('rd_hist', {}), token = ls.get('rd_token', ''), user = ls.get('rd_user', '');
     let manga = null, chapters = [], curIdx = 0, restoring = false, restoreTimer, contRow, planRow, doneRow, dm = null;
     let auto = false, raf = 0, fpos = 0, touching = false, touchTimer, sx = 0, sy = 0, st, syncT;
+
+    // ---------- Экраны и история (свайп назад не выбрасывает с сайта) ----------
+    let view = 'home', lastPop = 0;
+    const standalone = navigator.standalone || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+    function ui(show) { navPanel.classList.toggle('nav-hidden', !show); readerTop.classList.toggle('nav-hidden', !show); }
+    function setView(v) {
+        const prev = view; view = v;
+        startScreen.classList.toggle('hidden', v !== 'home');
+        detail.classList.toggle('hidden', v !== 'detail');
+        readerScreen.classList.toggle('hidden', v !== 'reader');
+        if (prev === 'reader' && v !== 'reader') {
+            if (!restoring) saveProgress();
+            syncNow(); auto = false; toggle.checked = false; cancelAnimationFrame(raf); closeSettings(); ui(false);
+        }
+        if (v === 'home') { renderContinue(); renderLists(); }
+        if (v === 'detail' && dm) renderDetailBtns();
+    }
+    function go(v) { history.pushState({ v }, ''); setView(v); }
+    window.addEventListener('popstate', e => {
+        lastPop = Date.now();
+        let v = (e.state && e.state.v) || 'home';
+        if (v === 'detail' && !dm) v = 'home';
+        if (v === 'reader' && !manga) v = 'home';
+        setView(v);
+    });
+    history.replaceState({ v: 'home' }, '');
 
     // ---------- API ----------
     async function call(params, opts = {}) {
@@ -142,8 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ls.set('rd_lib', lib); renderDetailBtns(); renderLists(); renderContinue();
         if (token) { clearTimeout(syncT); syncT = setTimeout(syncNow, 1500); }
     }
-    async function showDetail(m) {
-        dm = m; startScreen.classList.add('hidden'); detail.classList.remove('hidden'); detail.scrollTop = 0;
+    function showDetail(m) { renderDetail(m); go('detail'); }
+    async function renderDetail(m) {
+        dm = m; detail.scrollTop = 0;
         $('d-title').textContent = m.title; setCover($('d-cover'), m.cover);
         $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-ru').className = 'd-ru'; $('d-ru').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
         renderDetailBtns();
@@ -160,8 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
             d.tags.forEach(t => { const s = document.createElement('span'); s.textContent = t; $('d-tags').append(s); });
         } catch (e) { if (dm === m) $('d-desc').textContent = 'Не удалось загрузить описание: ' + e.message; }
     }
-    $('d-back').onclick = () => { detail.classList.add('hidden'); startScreen.classList.remove('hidden'); renderContinue(); renderLists(); };
-    $('d-read').onclick = () => { detail.classList.add('hidden'); openManga(dm); };
+    $('d-back').onclick = () => history.back();
+    $('d-read').onclick = () => openManga(dm);
     $('d-plan').onclick = () => setStatus('plan');
     $('d-done').onclick = () => setStatus('done');
 
@@ -289,13 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
             l.className = 'pill'; l.textContent = 'Открыть на внешнем сайте'; w.append(l);
         }
         const b = document.createElement('button'); b.className = 'pill'; b.textContent = '← Назад';
-        b.onclick = () => { readerScreen.classList.add('hidden'); showDetail(manga); };
+        b.onclick = () => history.back();
         w.append(b); reader.append(w);
     }
 
     async function openManga(m) {
         manga = m; chapters = [];
-        startScreen.classList.add('hidden'); readerScreen.classList.remove('hidden'); navPanel.classList.add('nav-hidden');
+        if (view === 'home') { renderDetail(m); history.pushState({ v: 'detail' }, ''); view = 'detail'; }
+        go('reader'); ui(false);
+        $('rt-title').textContent = m.title; $('rt-chap').textContent = '';
         msg('Загрузка списка глав…');
         try {
             const d = await call({ action: 'details', mangaUrl: m.id });
@@ -312,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (i < 0 || i >= chapters.length) return;
         const wasAuto = auto;
         cancelAnimationFrame(raf); clearInterval(restoreTimer);
-        curIdx = i; chapterSelect.value = i; closeSettings(); navPanel.classList.add('nav-hidden');
+        curIdx = i; chapterSelect.value = i; $('rt-chap').textContent = chapters[i].title; closeSettings(); ui(false);
         restoring = true;
         await loadPages(chapters[i].id);
         saveProgress(pos); restore(pos);
@@ -367,18 +396,18 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(st); st = setTimeout(() => saveProgress(), 400);
     });
 
-    // Тап по центру показывает панель, свайп в конце главы открывает следующую
-    reader.addEventListener('click', e => {
-        const x = e.clientX / innerWidth, y = e.clientY / innerHeight;
-        if (x > .25 && x < .75 && y > .25 && y < .75) {
-            if (settingsMenu.classList.contains('open')) closeSettings(); else navPanel.classList.toggle('nav-hidden');
-        }
+    // Тап по экрану показывает/прячет плашку с названием и нижнюю панель
+    reader.addEventListener('click', () => {
+        if (settingsMenu.classList.contains('open')) { closeSettings(); return; }
+        ui(navPanel.classList.contains('nav-hidden'));
     });
+    readerTop.onclick = () => history.back();
     reader.addEventListener('touchstart', e => { touching = true; clearTimeout(touchTimer); sx = e.changedTouches[0].clientX; sy = e.changedTouches[0].clientY; }, { passive: true });
     reader.addEventListener('touchend', e => {
         touchTimer = setTimeout(() => { touching = false; }, 1200);
         if (restoring) return;
         const dx = sx - e.changedTouches[0].clientX, dy = sy - e.changedTouches[0].clientY, h = mode() === 'paged-horizontal';
+        if (standalone && sx < 28 && dx < -70 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - lastPop > 700) { history.back(); return; }
         const end = h ? reader.scrollLeft >= reader.scrollWidth - reader.clientWidth - 5 : reader.scrollTop >= reader.scrollHeight - reader.clientHeight - 5;
         const swipe = h ? dx > 60 && Math.abs(dx) > Math.abs(dy) : dy > 60 && Math.abs(dy) > Math.abs(dx);
         if (end && swipe && curIdx < chapters.length - 1) openChapter(curIdx + 1);
@@ -404,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toggle.onchange = () => { auto = toggle.checked; if (auto) startAutoscroll(); else cancelAnimationFrame(raf); };
 
     // ---------- Меню и настройки ----------
-    function openSettings() { settingsMenu.classList.add('open'); navPanel.classList.add('nav-hidden'); }
+    function openSettings() { settingsMenu.classList.add('open'); ui(false); }
     function closeSettings() { settingsMenu.classList.remove('open'); }
     $('nav-settings').onclick = e => { e.stopPropagation(); openSettings(); };
     $('close-menu').onclick = closeSettings;
@@ -412,11 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('nav-next').onclick = () => openChapter(curIdx + 1);
     $('nav-top').onclick = () => reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
     chapterSelect.onchange = () => openChapter(+chapterSelect.value);
-    $('home-btn').onclick = () => {
-        saveProgress(); syncNow(); auto = false; toggle.checked = false; cancelAnimationFrame(raf);
-        closeSettings(); readerScreen.classList.add('hidden'); startScreen.classList.remove('hidden');
-        renderContinue();
-    };
+    $('home-btn').onclick = () => { closeSettings(); history.go(-2); };
     const setMode = v => { reader.className = 'mode-' + v; ls.set('rd_mode', v); };
     $('scroll-mode').onchange = e => {
         setMode(e.target.value); auto = false; toggle.checked = false; cancelAnimationFrame(raf);
@@ -426,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('bg-color').onchange = e => setBg(e.target.value);
 
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden && manga && !restoring && !readerScreen.classList.contains('hidden')) { saveProgress(); syncNow(); }
+        if (document.hidden && manga && !restoring && view === 'reader') { saveProgress(); syncNow(); }
     });
 
     // ---------- Запуск ----------
