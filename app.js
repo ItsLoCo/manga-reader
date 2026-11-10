@@ -63,20 +63,24 @@ document.addEventListener('DOMContentLoaded', () => {
     $('auth-close').onclick = () => $('auth-modal').classList.add('hidden');
 
     // ---------- Главная ----------
-    const norm = x => ({ id: x.url, title: x.title, cover: x.cover });
+    const norm = x => ({ id: x.url, title: x.title, cover: x.cover, ru: x.ru, ch: x.ch, lang: x.lang });
     const proxy = u => WORKER_URL + '?action=img&url=' + encodeURIComponent(u);
     function setCover(i, url) {
         i.onerror = null;
         if (!url) { i.removeAttribute('src'); return; }
         i.src = proxy(url); i.onerror = () => { i.onerror = null; i.src = url; };
     }
-    function card(m, sub, direct) {
+    function card(m, sub, direct, badge) {
         const d = document.createElement('div'); d.className = 'card';
         const i = new Image(); i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.alt = '';
         setCover(i, m.cover);
         const p = document.createElement('p'); p.textContent = m.title;
         d.append(i, p);
         if (sub) { const s = document.createElement('small'); s.textContent = sub; d.append(s); }
+        if (badge) {
+            const t = document.createElement('span'); t.className = 'tag' + (m.ru ? '' : ' no'); t.textContent = m.ru ? 'RU' : 'нет RU'; d.append(t);
+            if (m.ch) { const c = document.createElement('span'); c.className = 'cnt'; c.textContent = m.ch + ' гл.'; d.append(c); }
+        }
         d.onclick = () => { const x = { id: m.id, title: m.title, cover: m.cover }; if (direct) openManga(x); else showDetail(x); };
         return d;
     }
@@ -135,13 +139,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showDetail(m) {
         dm = m; startScreen.classList.add('hidden'); detail.classList.remove('hidden'); detail.scrollTop = 0;
         $('d-title').textContent = m.title; setCover($('d-cover'), m.cover);
-        $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
+        $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-ru').className = 'd-ru'; $('d-ru').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
         renderDetailBtns();
         try {
             const d = await call({ action: 'info', id: m.id });
             if (dm !== m) return;
             $('d-desc').textContent = d.description || 'Описание отсутствует.';
-            $('d-meta').textContent = [d.status, d.year].filter(Boolean).join(', ');
+            const lang = { ja: 'Манга', ko: 'Манхва', zh: 'Маньхуа', 'zh-hk': 'Маньхуа' }[d.lang];
+            $('d-meta').textContent = [lang, d.status, d.year, d.ch ? d.ch + ' гл.' : ''].filter(Boolean).join(', ');
+            const r = $('d-ru'); r.className = 'd-ru ' + (d.ru ? 'yes' : 'no');
+            r.textContent = d.ru ? 'Есть перевод на русский' : 'Русского перевода пока нет';
             d.tags.forEach(t => { const s = document.createElement('span'); s.textContent = t; $('d-tags').append(s); });
         } catch (e) { if (dm === m) $('d-desc').textContent = 'Не удалось загрузить описание: ' + e.message; }
     }
@@ -150,21 +157,109 @@ document.addEventListener('DOMContentLoaded', () => {
     $('d-plan').onclick = () => setStatus('plan');
     $('d-done').onclick = () => setStatus('done');
 
-    async function search(q) {
-        q = q.trim(); if (!q) return;
-        const box = $('search-results');
-        box.className = 'grid'; box.textContent = 'Ищу…'; $('home').classList.add('hidden');
-        try {
-            const d = await call({ action: 'search', query: q });
-            box.textContent = d.entries.length ? '' : 'Ничего не найдено';
-            d.entries.forEach(x => box.append(card(norm(x))));
-        } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
+    // ---------- Поиск и фильтры ----------
+    const F = { order: 'rel', ru: false, status: new Set(), origin: new Set(), rating: new Set(), ch: '', tags: new Map() };
+    const OPT = {
+        order: [['rel', 'Релевантность'], ['pop', 'Популярность'], ['rate', 'Рейтинг'], ['upd', 'Обновления'], ['new', 'Новинки'], ['az', 'По названию']],
+        status: [['ongoing', 'Выходит'], ['completed', 'Завершён'], ['hiatus', 'Перерыв'], ['cancelled', 'Отменён']],
+        origin: [['ja', 'Манга'], ['ko', 'Манхва'], ['zh', 'Маньхуа']],
+        rating: [['safe', 'Для всех'], ['suggestive', '16+'], ['erotica', '18+']],
+        ch: [['', 'Любое'], ['s', 'До 50'], ['m', '50–150'], ['l', '150+']],
+    };
+    let tagData = null, nextOffset = 0, searching = false, shown = 0;
+    const resBox = $('results'), grid = $('grid');
+    const activeCount = () => (F.order !== 'rel') + F.ru + F.status.size + F.origin.size + F.rating.size + (F.ch ? 1 : 0) + F.tags.size;
+    function updateBadge() { const n = activeCount(), b = $('f-badge'); b.textContent = n; b.classList.toggle('hidden', !n); }
+
+    function chip(label, on, onTap, extra) {
+        const b = document.createElement('button'); b.className = 'chip' + (on ? ' on' : '') + (extra ? ' ' + extra : '');
+        b.textContent = label; b.onclick = () => onTap(b); return b;
     }
-    $('search-btn').onclick = () => search(searchInput.value);
-    searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') search(searchInput.value); });
-    searchInput.addEventListener('input', () => {
-        if (!searchInput.value) { $('search-results').className = 'hidden'; $('home').classList.remove('hidden'); }
-    });
+    function group(title, els) {
+        const g = document.createElement('div'); g.className = 'fg';
+        const h = document.createElement('h4'); h.textContent = title;
+        const w = document.createElement('div'); w.className = 'chips'; w.append(...els);
+        g.append(h, w); return g;
+    }
+    const multiChips = (set, items) => items.map(([k, l]) => chip(l, set.has(k), b => {
+        if (set.has(k)) set.delete(k); else set.add(k); b.classList.toggle('on', set.has(k));
+    }));
+    function singleChips(items, get, setv) {
+        const els = items.map(([k, l]) => chip(l, get() === k, b => { setv(k); els.forEach(e => e.classList.toggle('on', e === b)); }));
+        return els;
+    }
+    const tagChips = list => list.map(t => chip(t.name, F.tags.get(t.id) === 1, b => {
+        const v = F.tags.get(t.id);
+        if (!v) F.tags.set(t.id, 1); else if (v === 1) F.tags.set(t.id, -1); else F.tags.delete(t.id);
+        const nv = F.tags.get(t.id); b.classList.toggle('on', nv === 1); b.classList.toggle('ex', nv === -1);
+    }, F.tags.get(t.id) === -1 ? 'ex' : ''));
+
+    async function buildFilters() {
+        const body = $('fs-body'); body.textContent = 'Загрузка…';
+        if (!tagData) { try { tagData = (await call({ action: 'tags' })).tags; } catch {} }
+        const tags = tagData || [], by = g => tags.filter(t => t.group === g);
+        body.textContent = '';
+        body.append(
+            group('Сортировка', singleChips(OPT.order, () => F.order, v => { F.order = v; })),
+            group('Русский перевод', [chip('Только с русским переводом', F.ru, b => { F.ru = !F.ru; b.classList.toggle('on', F.ru); })]),
+            group('Формат', [...multiChips(F.origin, OPT.origin), ...tagChips(by('format'))]),
+            group('Статус', multiChips(F.status, OPT.status)),
+            group('Возрастной рейтинг', multiChips(F.rating, OPT.rating)),
+            group('Количество глав', singleChips(OPT.ch, () => F.ch, v => { F.ch = v; }))
+        );
+        const note = document.createElement('p'); note.className = 'fs-hint';
+        note.textContent = 'Число глав известно в основном у завершённых тайтлов: при выбранном фильтре выходящие без итогового числа скрываются.';
+        body.append(note);
+        if (tags.length) {
+            body.append(group('Жанры', tagChips(by('genre'))), group('Темы', tagChips(by('theme'))));
+            const hint = document.createElement('p'); hint.className = 'fs-hint';
+            hint.textContent = 'Нажми на жанр или тему повторно, чтобы исключить её из поиска.'; body.append(hint);
+        } else { const e = document.createElement('p'); e.textContent = 'Не удалось загрузить жанры. Закрой и открой фильтры ещё раз.'; body.append(e); }
+    }
+    const openFilters = () => { $('filter-sheet').classList.add('open'); $('sheet-bg').classList.remove('hidden'); buildFilters(); };
+    const closeFilters = () => { $('filter-sheet').classList.remove('open'); $('sheet-bg').classList.add('hidden'); };
+    $('filter-btn').onclick = openFilters; $('sheet-bg').onclick = closeFilters;
+    $('f-apply').onclick = () => { closeFilters(); updateBadge(); search(); };
+    $('f-reset').onclick = () => {
+        F.order = 'rel'; F.ru = false; F.status.clear(); F.origin.clear(); F.rating.clear(); F.ch = ''; F.tags.clear();
+        updateBadge(); buildFilters();
+    };
+
+    function searchParams(offset) {
+        const p = { action: 'search', query: searchInput.value.trim(), order: F.order, offset };
+        if (F.ru) p.ru = '1';
+        if (F.status.size) p.status = [...F.status].join(',');
+        if (F.origin.size) p.origin = [...F.origin].join(',');
+        if (F.rating.size) p.rating = [...F.rating].join(',');
+        if (F.ch) p.ch = F.ch;
+        const inc = [], exc = [];
+        F.tags.forEach((v, id) => (v === 1 ? inc : exc).push(id));
+        if (inc.length) p.inc = inc.join(',');
+        if (exc.length) p.exc = exc.join(',');
+        return p;
+    }
+    const gmsg = t => { grid.textContent = ''; const d = document.createElement('div'); d.className = 'gmsg'; d.textContent = t; grid.append(d); };
+    async function search(more) {
+        if (searching) return;
+        if (!more && !searchInput.value.trim() && !activeCount()) return;
+        searching = true;
+        resBox.classList.remove('hidden'); $('home').classList.add('hidden');
+        if (!more) { shown = 0; gmsg('Ищу…'); $('rcount').textContent = ''; $('more').classList.add('hidden'); }
+        try {
+            const d = await call(searchParams(more ? nextOffset : 0));
+            if (!more) grid.textContent = '';
+            if (!more && !d.entries.length) gmsg('Ничего не найдено. Попробуй изменить фильтры.');
+            d.entries.forEach(x => grid.append(card(norm(x), null, false, true)));
+            shown += d.entries.length; nextOffset = d.offset + d.limit;
+            $('more').classList.toggle('hidden', nextOffset >= d.total);
+            $('rcount').textContent = d.filtered ? 'Показано: ' + shown : 'Найдено: ' + d.total;
+        } catch (e) { if (!more) gmsg('Ошибка: ' + e.message); }
+        finally { searching = false; }
+    }
+    $('search-btn').onclick = () => search();
+    $('more').onclick = () => search(true);
+    $('rclose').onclick = () => { resBox.classList.add('hidden'); $('home').classList.remove('hidden'); searchInput.value = ''; };
+    searchInput.addEventListener('keypress', e => { if (e.key === 'Enter') search(); });
 
     // ---------- Чтение ----------
     const msg = (t, bad) => { reader.innerHTML = ''; const d = document.createElement('div'); d.className = 'msg' + (bad ? ' bad' : ''); d.textContent = t; reader.append(d); };
