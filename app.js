@@ -16,10 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- API ----------
     async function call(params, opts = {}) {
-        const r = await fetch(WORKER_URL + '?' + new URLSearchParams(params), opts);
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-        return d;
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+        try {
+            const r = await fetch(WORKER_URL + '?' + new URLSearchParams(params), { ...opts, signal: ctl.signal });
+            const d = await r.json();
+            if (d.error) throw new Error(d.error);
+            return d;
+        } catch (e) {
+            if (e.name === 'AbortError') throw new Error('сервер не отвечает (таймаут 20 секунд)');
+            throw e;
+        } finally { clearTimeout(timer); }
     }
     const post = (action, body) => call({ action }, {
         method: 'POST',
@@ -147,8 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
             $('d-desc').textContent = d.description || 'Описание отсутствует.';
             const lang = { ja: 'Манга', ko: 'Манхва', zh: 'Маньхуа', 'zh-hk': 'Маньхуа' }[d.lang];
             $('d-meta').textContent = [lang, d.status, d.year, d.ch ? d.ch + ' гл.' : ''].filter(Boolean).join(', ');
-            const r = $('d-ru'); r.className = 'd-ru ' + (d.ru ? 'yes' : 'no');
-            r.textContent = d.ru ? 'Есть перевод на русский' : 'Русского перевода пока нет';
+            const r = $('d-ru');
+            if (d.ruRead > 0) { r.className = 'd-ru yes'; r.textContent = 'Русский перевод: ' + d.ruRead + ' гл. в читалке'; }
+            else if (d.ruExt > 0) { r.className = 'd-ru no'; r.textContent = 'Русские главы только на внешних сайтах'; }
+            else { r.className = 'd-ru no'; r.textContent = d.ru ? 'Русский перевод заявлен, но глав пока нет' : 'Русского перевода пока нет'; }
             d.tags.forEach(t => { const s = document.createElement('span'); s.textContent = t; $('d-tags').append(s); });
         } catch (e) { if (dm === m) $('d-desc').textContent = 'Не удалось загрузить описание: ' + e.message; }
     }
@@ -264,6 +272,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------- Чтение ----------
     const msg = (t, bad) => { reader.innerHTML = ''; const d = document.createElement('div'); d.className = 'msg' + (bad ? ' bad' : ''); d.textContent = t; reader.append(d); };
 
+    function noChapters(x = {}) {
+        reader.innerHTML = '';
+        const w = document.createElement('div'); w.className = 'msg';
+        const t = document.createElement('p');
+        t.textContent = x.ru > 0 ? 'Русские главы этого тайтла размещены на внешнем сайте, внутри читалки их открыть нельзя.'
+            : x.url ? 'Главы этого тайтла размещены на внешних сайтах.' : 'Для этого тайтла нет глав, доступных для чтения.';
+        w.append(t);
+        if (/^https?:\/\//.test(x.url || '')) {
+            const l = document.createElement('a'); l.href = x.url; l.target = '_blank'; l.rel = 'noopener noreferrer';
+            l.className = 'pill'; l.textContent = 'Открыть на внешнем сайте'; w.append(l);
+        }
+        const b = document.createElement('button'); b.className = 'pill'; b.textContent = '← Назад';
+        b.onclick = () => { readerScreen.classList.add('hidden'); showDetail(manga); };
+        w.append(b); reader.append(w);
+    }
+
     async function openManga(m) {
         manga = m; chapters = [];
         startScreen.classList.add('hidden'); readerScreen.classList.remove('hidden'); navPanel.classList.add('nav-hidden');
@@ -271,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const d = await call({ action: 'details', mangaUrl: m.id });
             chapters = d.chapters.map(c => ({ id: c.url, title: `${c.title} ${c.number}` }));
-            if (!chapters.length) throw new Error('Для этого тайтла нет глав, доступных для чтения');
+            if (!chapters.length) return noChapters(d.external);
             chapterSelect.innerHTML = '';
             chapters.forEach((c, i) => chapterSelect.add(new Option(c.title, i)));
             const h = history[m.id], i = h ? chapters.findIndex(c => c.id === h.ch) : -1;
