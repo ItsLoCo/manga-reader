@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             $('d-meta').textContent = [lang, d.status, d.year, d.ch ? d.ch + ' гл.' : ''].filter(Boolean).join(', ');
             const r = $('d-ru');
             if (d.ruRead > 0) { r.className = 'd-ru yes'; r.textContent = 'Русский перевод: ' + d.ruRead + ' гл. в читалке'; }
-            else if (d.ruExt > 0) { r.className = 'd-ru no'; r.textContent = 'Русские главы только на внешних сайтах'; }
+            else if (d.ruExt > 0) { r.className = 'd-ru no'; r.textContent = 'Русские главы недоступны в читалке (внешний сайт или удалены)'; }
             else { r.className = 'd-ru no'; r.textContent = d.ru ? 'Русский перевод заявлен, но глав пока нет' : 'Русского перевода пока нет'; }
             d.tags.forEach(t => { const s = document.createElement('span'); s.textContent = t; $('d-tags').append(s); });
         } catch (e) { if (dm === m) $('d-desc').textContent = 'Не удалось загрузить описание: ' + e.message; }
@@ -277,7 +277,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const w = document.createElement('div'); w.className = 'msg';
         const t = document.createElement('p');
         t.textContent = x.ru > 0 ? 'Русские главы этого тайтла размещены на внешнем сайте, внутри читалки их открыть нельзя.'
-            : x.url ? 'Главы этого тайтла размещены на внешних сайтах.' : 'Для этого тайтла нет глав, доступных для чтения.';
+            : x.url ? 'Главы этого тайтла размещены на внешних сайтах.'
+            : (x.empty?.ru || x.empty?.en) ? 'Главы этого тайтла удалены с MangaDex (так бывает у лицензированных тайтлов), читать их здесь нельзя.'
+            : 'Для этого тайтла нет глав, доступных для чтения.';
         w.append(t);
         if (/^https?:\/\//.test(x.url || '')) {
             const l = document.createElement('a'); l.href = x.url; l.target = '_blank'; l.rel = 'noopener noreferrer';
