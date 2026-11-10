@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -15,7 +15,7 @@
 
     <div id="start-screen">
         <header class="top">
-            <h1 class="logo">Reader</h1>
+            <div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
             <button id="auth-btn" class="pill">Войти</button>
         </header>
         <div class="main-search-box">
@@ -25,6 +25,20 @@
         <div id="search-results" class="hidden"></div>
         <div id="home"></div>
         <footer class="by">by LoCo</footer>
+    </div>
+
+    <div id="detail-screen" class="hidden">
+        <button id="d-back" class="pill">← Назад</button>
+        <div class="d-head">
+            <img id="d-cover" alt="">
+            <div><h2 id="d-title"></h2><p id="d-meta"></p><div id="d-tags"></div></div>
+        </div>
+        <p id="d-desc"></p>
+        <button id="d-read">Читать</button>
+        <div class="d-btns">
+            <button id="d-plan" class="ghost">Хочу прочитать</button>
+            <button id="d-done" class="ghost">Прочитано</button>
+        </div>
     </div>
 
     <div id="reader-screen" class="hidden">
