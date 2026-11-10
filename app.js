@@ -27,14 +27,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
+    let currentSourceId = 'mangadex'; // Источник по умолчанию для Nyora
+    let currentMangaUrl = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    // Используем публичный CORS-прокси прямо в браузере, чтобы обойти блокировки
-    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-    const API_BASE = 'https://api.comick.io';
+    // Адрес твоего Cloudflare Worker, который проксирует запросы к Nyora
+    const WORKER_URL = 'https://empty-firefly-874a.niko-rad3.workers.dev/';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -148,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ЛОГИКА COMICK ====================
+    // ==================== ЛОГИКА NYORA CLOUD ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
@@ -159,24 +160,26 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.classList.remove('hidden');
         
         try {
-            const url = `${API_BASE}/v1.0/search?q=${encodeURIComponent(query)}&limit=15`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(url));
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const response = await fetch(`${WORKER_URL}?action=search&query=${encodeURIComponent(query)}`);
             const data = await response.json();
 
+            if (data.error) throw new Error(data.error);
+
             searchResults.innerHTML = '';
-            if (!data || data.length === 0) {
+            const entries = data.entries || [];
+            
+            if (entries.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                data.forEach(manga => {
+                entries.forEach(manga => {
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    item.textContent = manga.title || manga.slug;
+                    item.textContent = manga.title || 'Без названия';
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        loadChaptersForManga(manga.slug);
+                        currentMangaUrl = manga.url;
+                        loadChaptersForManga(manga.url);
                     });
                     searchResults.appendChild(item);
                 });
@@ -190,26 +193,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 2. ГЛАВЫ
-    async function loadChaptersForManga(slug) {
+    // 2. ЗАГРУЗКА ГЛАВ
+    async function loadChaptersForManga(mangaUrl) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            const url = `${API_BASE}/v1.0/comic/${slug}/chapters?lang=ru`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(url));
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const response = await fetch(`${WORKER_URL}?action=details&sourceId=${currentSourceId}&mangaUrl=${encodeURIComponent(mangaUrl)}`);
             const data = await response.json();
 
-            if (!data || !data.chapters || data.chapters.length === 0) {
-                throw new Error("Русские главы не найдены");
-            }
+            if (data.error) throw new Error(data.error);
+            const chapters = data.chapters || [];
+            
+            if (chapters.length === 0) throw new Error("Главы не найдены");
 
-            chaptersList = data.chapters.map(ch => ({
-                id: ch.hid,
-                title: `Глава ${ch.chap || '?'}`
+            chaptersList = chapters.map(ch => ({
+                id: ch.url,
+                title: `${ch.title || 'Глава'} ${ch.number || '?'}`
             }));
 
             chapterSelect.innerHTML = '';
@@ -233,31 +234,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. СТРАНИЦЫ
-    async function loadChapterPages(chapterId) {
+    // 3. ЗАГРУЗКА СТРАНИЦ
+    async function loadChapterPages(chapterUrl) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            const url = `${API_BASE}/v1.0/chapter/${chapterId}?tachiyomi=true`;
-            const response = await fetch(CORS_PROXY + encodeURIComponent(url));
-            
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const response = await fetch(`${WORKER_URL}?action=pages&sourceId=${currentSourceId}&chapterUrl=${encodeURIComponent(chapterUrl)}`);
             const data = await response.json();
 
-            const pages = data.chapter.images;
-            if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
-
-            const baseUrl = 'https://meo.comick.pictures/';
+            if (data.error) throw new Error(data.error);
+            const pages = data.pages || [];
+            
+            if (pages.length === 0) throw new Error("В главе нет страниц");
 
             reader.innerHTML = '';
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageData, index) => {
-                const imageUrl = baseUrl + pageData.b2key + '.' + pageData.name.split('.').pop();
-
+            pages.forEach((page, index) => {
+                const imageUrl = page.url;
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
