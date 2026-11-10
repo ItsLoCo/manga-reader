@@ -28,36 +28,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
     let currentMangaId = null;
+    let accessToken = null; // Сюда сохранится токен после логина
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    // Твоя зашифрованная строка с ключами
+    // Твоя зашифрованная строка с ключами (Client ID, Secret, логин, пароль)
     const ENCODED_KEYS = 'cGVyc29uYWwtY2xpZW50LTc5NDYyYmFiLTk1ODEtNGU2ZC05MzJlLTI3YjdiOGI2NDk5Zi04NGYzYzQ4ZiUzQWlFNmFxRUliVFY2WDc0MDVRRHRHN0NHQmMyeTlTMkFJJTNBbG9jbzY3JTNBa2hhcmJhbGFraA==';
+    const AUTH_URL = 'https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token';
+    const API_BASE = 'https://api.mangadex.org';
 
-    // --- ИНИЦИАЛИЗАЦИЯ MANGADEX SDK ---
-    let isAuthorized = false;
-    try {
-        // Расшифровываем ключи
-        const decoded = decodeURIComponent(atob(ENCODED_KEYS));
-        const [clientId, clientSecret, username, password] = decoded.split(':');
+    // ==================== АВТОРИЗАЦИЯ ====================
+    async function login() {
+        try {
+            const decoded = decodeURIComponent(atob(ENCODED_KEYS));
+            const [clientId, clientSecret, username, password] = decoded.split(':');
 
-        // Правильный вызов авторизации согласно документации библиотеки
-        await loginPersonal({
-            clientId: clientId,
-            clientSecret: clientSecret,
-            username: username,
-            password: password
-        });
-        isAuthorized = true;
-        console.log('Успешная авторизация в MangaDex');
-    } catch (err) {
-        console.error('Ошибка авторизации:', err);
-        if (searchResults) {
-            searchResults.innerHTML = '<div class="search-item" style="color:red;">Ошибка входа. Проверьте ключи или соединение.</div>';
+            const formData = new URLSearchParams();
+            formData.append('grant_type', 'password');
+            formData.append('username', username);
+            formData.append('password', password);
+            formData.append('client_id', clientId);
+            formData.append('client_secret', clientSecret);
+
+            const response = await fetch(AUTH_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Auth failed: ${response.status} ${errText.substring(0, 50)}`);
+            }
+
+            const data = await response.json();
+            accessToken = data.access_token;
+            console.log('Успешная авторизация, токен получен');
+            return true;
+        } catch (err) {
+            console.error('Ошибка авторизации:', err);
+            if (searchResults) {
+                searchResults.innerHTML = `<div class="search-item" style="color:red;">Ошибка входа: ${err.message}</div>`;
+            }
+            return false;
         }
     }
+
+    // Запускаем процесс логина при старте
+    const isLoggedIn = await login();
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -173,44 +193,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ОСНОВНАЯ ЛОГИКА MANGADEX ====================
+    // ==================== API ЗАПРОСЫ ====================
 
-    // 1. ПОИСК
     async function searchManga(query) {
-        if (!query.trim()) return;
-        if (!isAuthorized) {
-            searchResults.innerHTML = '<div class="search-item" style="color:red;">Авторизация не удалась. Проверьте консоль.</div>';
-            return;
-        }
+        if (!query.trim() || !isLoggedIn) return;
         searchBtn.textContent = "Ищу...";
         searchBtn.disabled = true;
         searchResults.innerHTML = "";
         searchResults.classList.remove('hidden');
-        
+
         try {
-            // Правильный вызов поиска через класс Manga
-            const mangas = await Manga.search({
-                title: query,
-                limit: 15
+            const url = `${API_BASE}/manga?title=${encodeURIComponent(query)}&limit=15&includes[]=cover_art`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
 
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
             searchResults.innerHTML = '';
-            
-            if (!mangas || mangas.length === 0) {
+            if (!data.data || data.data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                mangas.forEach(manga => {
-                    // Безопасное извлечение названия
-                    let title = 'Без названия';
-                    if (manga.localTitle) title = manga.localTitle;
-                    else if (manga.attributes && manga.attributes.title) {
-                        title = manga.attributes.title.ru || manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Без названия';
-                    }
-
+                data.data.forEach(manga => {
+                    const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
                     item.textContent = title;
-                    
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
@@ -220,7 +229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     searchResults.appendChild(item);
                 });
             }
-        } catch (err) { 
+        } catch (err) {
             console.error("Search error:", err);
             searchResults.innerHTML = `<div class="search-item" style="color: #ff5555; font-size: 12px;">Ошибка: ${err.message}</div>`;
         } finally {
@@ -229,31 +238,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
+    function getMangaTitle(manga) {
+        const attrs = manga.attributes;
+        if (attrs.title.ru) return attrs.title.ru;
+        if (attrs.title.en) return attrs.title.en;
+        const titleKeys = Object.keys(attrs.title);
+        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
+        return 'Без названия';
+    }
+
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            const manga = await Manga.get(mangaId);
-            const feed = await manga.getFeed({
-                translatedLanguage: ['ru', 'en'],
-                order: { chapter: 'asc' },
-                limit: 500
+            const url = `${API_BASE}/manga/${mangaId}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=asc&limit=500`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
 
-            if (!feed || feed.length === 0) {
-                throw new Error("Главы не найдены");
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
 
-            chaptersList = feed.map(ch => {
-                const lang = ch.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
-                const chapterNum = ch.chapter || '?';
-                return {
-                    id: ch.id,
-                    title: `${lang} Глава ${chapterNum}`
-                };
+            if (!data.data || data.data.length === 0) throw new Error("Главы не найдены");
+
+            chaptersList = data.data.map(ch => {
+                const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
+                const chapterNum = ch.attributes.chapter || '?';
+                return { id: ch.id, title: `${lang} Глава ${chapterNum}` };
             });
 
             chapterSelect.innerHTML = '';
@@ -277,23 +290,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ
     async function loadChapterPages(chapterId) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            const chapter = await Chapter.get(chapterId);
-            const pages = await chapter.getReadablePages();
+            const url = `${API_BASE}/at-home/server/${chapterId}`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
 
-            if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const serverData = await response.json();
+
+            const baseUrl = serverData.baseUrl;
+            const hash = serverData.chapter.hash;
+            const pageFiles = serverData.chapter.data;
+
+            if (!pageFiles || pageFiles.length === 0) throw new Error("В главе нет страниц");
 
             reader.innerHTML = '';
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageUrl, index) => {
+            pageFiles.forEach((fileName, index) => {
+                const imageUrl = `${baseUrl}/data/${hash}/${fileName}`;
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
@@ -306,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 pageBlock.style.transition = 'opacity 0.4s ease';
 
                 const img = document.createElement('img');
-                img.src = pageUrl;
+                img.src = imageUrl;
                 img.alt = `Страница ${index + 1}`;
                 img.style.width = '100%';
                 img.style.maxWidth = '100vw';
@@ -332,7 +354,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- ВОССТАНОВЛЕНИЕ ПОЗИЦИИ ---
     function restoreScrollPosition() {
         const pos = parseFloat(localStorage.getItem('reader_last_position') || '0');
         if (pos > 0) {
