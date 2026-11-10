@@ -87,3 +87,20 @@ button.ghost { background:transparent !important; border:1px solid var(--line) !
 
 #progress-bar-container { position:fixed; top:0; left:0; width:100%; height:3px; z-index:100; }
 #progress-bar { width:0; height:100%; background:var(--blue); box-shadow:0 0 8px var(--blue); transition:width .1s linear; }
+
+.by-top { text-align:left; margin-top:2px; }
+#detail-screen { position:fixed; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; z-index:5;
+  padding:calc(16px + env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
+  background:radial-gradient(circle at 50% -10%, #0d2250 0%, #000 55%); }
+.d-head { display:flex; gap:16px; margin:18px 0; }
+#d-cover { width:130px; height:186px; object-fit:cover; border-radius:12px; background:var(--card); border:1px solid var(--line); flex-shrink:0; }
+#d-title { font-size:20px; line-height:1.25; }
+#d-meta { color:var(--mute); font-size:13px; margin-top:6px; }
+#d-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+#d-tags span { font-size:11px; border:1px solid var(--line); border-radius:12px; padding:3px 9px; color:var(--blue); }
+#d-desc { font-size:14px; line-height:1.55; color:#c3cde4; margin-bottom:20px; white-space:pre-line; }
+#d-read { width:100%; background:var(--blue); color:#fff; border:none; padding:14px; border-radius:12px; font-weight:600; font-size:15px; }
+#d-read:active { background:var(--blue-d); }
+.d-btns { display:flex; gap:10px; margin-top:10px; }
+.d-btns button { flex:1; padding:13px; border-radius:12px; font-size:14px; }
+.d-btns button.on { border-color:var(--blue) !important; color:var(--blue) !important; }
