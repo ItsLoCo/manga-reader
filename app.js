@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    // 🔑 СЮДА ВСТАВЬ СВОЮ ЗАШИФРОВАННУЮ СТРОКУ (из шага 1)
     const ENCODED_KEYS = 'cGVyc29uYWwtY2xpZW50LTc5NDYyYmFiLTk1ODEtNGU2ZC05MzJlLTI3YjdiOGI2NDk5Zi04NGYzYzQ4ZiUzQWlFNmFxRUliVFY2WDc0MDVRRHRHN0NHQmMyeTlTMkFJJTNBbG9jbzY3JTNBa2hhcmJhbGFraA==';
 
     // --- ИНИЦИАЛИЗАЦИЯ MANGADEX SDK ---
@@ -57,23 +56,110 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.error('Ошибка авторизации:', err);
         searchResults.innerHTML = '<div class="search-item" style="color:red;">Ошибка входа. Проверьте ключи.</div>';
-        return; // Прерываем выполнение, если не смогли войти
+        return; 
     }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
-    // (Оставляем без изменений, копируем из прошлого кода)
-    function updateProgressIndicators() { /* ... код без изменений ... */ }
-    function startAutoscroll() { /* ... код без изменений ... */ }
-    function stopAutoscroll() { /* ... код без изменений ... */ }
-    function handleTouchStart(e) { /* ... код без изменений ... */ }
-    function handleTouchEnd(e) { /* ... код без изменений ... */ }
-    function handleTouchGestures() { /* ... код без изменений ... */ }
-    async function switchChapter(index) { /* ... код без изменений ... */ }
-    function restoreScrollPosition() { /* ... код без изменений ... */ }
-    function openSettings() { /* ... код без изменений ... */ }
-    function closeSettings() { /* ... код без изменений ... */ }
 
-    // --- УПРАВЛЕНИЕ НАВИГАЦИЕЙ ---
+    function updateProgressIndicators() {
+        const currentMode = scrollModeSelect.value;
+        let scrolled = 0, totalScrollable = 0;
+
+        if (currentMode === 'paged-horizontal') {
+            scrolled = reader.scrollLeft;
+            totalScrollable = reader.scrollWidth - reader.clientWidth;
+        } else {
+            scrolled = reader.scrollTop;
+            totalScrollable = reader.scrollHeight - reader.clientHeight;
+        }
+
+        const chapterPercent = totalScrollable > 0 ? Math.round((scrolled / totalScrollable) * 100) : 0;
+        progressBar.style.width = `${chapterPercent}%`;
+        chapterPctText.textContent = `${chapterPercent}%`;
+
+        if (chapterSelect.options.length > 0) {
+            const currentChapterIndex = chapterSelect.selectedIndex + 1;
+            const totalChaptersCount = chapterSelect.options.length;
+            mangaPctText.textContent = `${Math.round((currentChapterIndex / totalChaptersCount) * 100)}%`;
+        }
+        
+        navPrevBtn.disabled = chapterSelect.selectedIndex === 0;
+        navNextBtn.disabled = chapterSelect.selectedIndex === chapterSelect.options.length - 1;
+    }
+
+    function startAutoscroll() {
+        if (autoscrollInterval) cancelAnimationFrame(autoscrollInterval);
+        function scrollLoop() {
+            if (scrollModeSelect.value === 'paged-horizontal' || !isAutoscrollActive) return;
+            if (!userInteracting) {
+                reader.scrollTop += parseFloat(autoscrollSpeed.value) * 0.4;
+                if (reader.scrollTop >= reader.scrollHeight - reader.clientHeight - 2) {
+                    stopAutoscroll();
+                    autoscrollToggle.checked = false;
+                    if (chapterSelect.selectedIndex < chapterSelect.options.length - 1) switchChapter(chapterSelect.selectedIndex + 1);
+                    return;
+                }
+            }
+            autoscrollInterval = requestAnimationFrame(scrollLoop);
+        }
+        autoscrollInterval = requestAnimationFrame(scrollLoop);
+    }
+
+    function stopAutoscroll() {
+        isAutoscrollActive = false;
+        if (autoscrollInterval) cancelAnimationFrame(autoscrollInterval);
+    }
+
+    function handleTouchStart(e) {
+        userInteracting = true; 
+        clearTimeout(userInteractionTimeout);
+        const t = e.changedTouches[0];
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+    }
+    function handleTouchEnd(e) {
+        userInteractionTimeout = setTimeout(() => { userInteracting = false; }, 1500);
+        const t = e.changedTouches[0];
+        touchEndX = t.clientX;
+        touchEndY = t.clientY;
+        handleTouchGestures();
+    }
+
+    readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
+    readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    function handleTouchGestures() {
+        const diffX = touchStartX - touchEndX;
+        const diffY = touchStartY - touchEndY;
+        const currentMode = scrollModeSelect.value;
+
+        if (currentMode === 'paged-horizontal' && Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > SWIPE_THRESHOLD) {
+            reader.scrollBy({ left: diffX > 0 ? reader.clientWidth : -reader.clientWidth, behavior: 'smooth' });
+            return;
+        }
+        if (diffY > SWIPE_THRESHOLD && Math.abs(diffY) > Math.abs(diffX)) {
+            const isAtEnd = currentMode === 'paged-horizontal' ? (reader.scrollLeft >= reader.scrollWidth - reader.clientWidth - 5) : (reader.scrollTop >= reader.scrollHeight - reader.clientHeight - 5);
+            if (isAtEnd && chapterSelect.selectedIndex < chapterSelect.options.length - 1) switchChapter(chapterSelect.selectedIndex + 1);
+        }
+    }
+
+    async function switchChapter(index) {
+        if (index < 0 || index >= chapterSelect.options.length) return;
+        chapterSelect.selectedIndex = index;
+        const chapterId = chapterSelect.value;
+        localStorage.setItem('reader_last_chapter', chapterId);
+        localStorage.setItem('reader_last_position', 0);
+        
+        const wasAutoscroll = isAutoscrollActive;
+        stopAutoscroll();
+        
+        closeSettings();
+        navNavigationPanel.classList.add('nav-hidden');
+
+        await loadChapterPages(chapterId);
+        if (wasAutoscroll) setTimeout(startAutoscroll, 1000);
+    }
+
     navTopBtn.addEventListener('click', () => { 
         reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); 
         localStorage.setItem('reader_last_position', 0); 
@@ -82,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ЛОГИКА MANGADEX С БИБЛИОТЕКОЙ ====================
+    // ==================== ЛОГИКА MANGADEX ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
@@ -93,17 +179,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         searchResults.classList.remove('hidden');
         
         try {
-            // Используем метод search из библиотеки
+            // Ищем с сортировкой по релевантности и просим обложки
             const mangaList = await client.manga.search({
                 title: query,
-                limit: 15
+                limit: 15,
+                order: { relevance: 'desc' },
+                includes: ['cover_art']
             });
 
             searchResults.innerHTML = '';
-            if (mangaList.results.length === 0) {
+            
+            // Проверяем, где лежат результаты (в results или в data)
+            const results = mangaList.results || mangaList.data || [];
+            
+            if (results.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                mangaList.results.forEach(manga => {
+                results.forEach(manga => {
                     const title = getMangaTitle(manga);
                     const item = document.createElement('div');
                     item.className = 'search-item';
@@ -142,7 +234,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            // Получаем главы через библиотеку
             const feed = await client.manga.getFeed(mangaId, {
                 translatedLanguage: ['ru', 'en'],
                 order: { chapter: 'asc' },
@@ -189,8 +280,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         progressBar.style.width = '0%';
 
         try {
-            // Получаем страницы через библиотеку
-            const chapter = await client.chapter.get(chapterId);
             const pages = await client.chapter.getPages(chapterId);
 
             if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
@@ -239,14 +328,107 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // ... (остальной код для управления интерфейсом и слушателей остаётся без изменений) ...
-    
-    // Инициализация
+    function restoreScrollPosition() {
+        const pos = parseFloat(localStorage.getItem('reader_last_position') || '0');
+        if (pos > 0) {
+            const mode = scrollModeSelect.value;
+            if (mode === 'paged-horizontal') {
+                reader.scrollLeft = pos;
+            } else {
+                reader.scrollTop = pos;
+            }
+        }
+        updateProgressIndicators();
+    }
+
+    // ==================== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ====================
+
+    function openSettings() {
+        settingsMenu.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            settingsMenu.style.transform = 'translateY(0%)';
+        });
+        navNavigationPanel.classList.add('nav-hidden');
+    }
+
+    function closeSettings() {
+        settingsMenu.style.transform = 'translateY(100%)';
+        setTimeout(() => {
+            settingsMenu.classList.add('hidden');
+        }, 250); 
+    }
+
+    menuTrigger.addEventListener('click', () => {
+        if (settingsMenu.classList.contains('hidden')) {
+            navNavigationPanel.classList.toggle('nav-hidden');
+        } else {
+            closeSettings();
+        }
+    });
+
+    navSettingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSettings();
+    });
+
+    closeMenu.addEventListener('click', closeSettings);
+
+    let scrollTimeout;
+    reader.addEventListener('scroll', () => {
+        updateProgressIndicators();
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            if (!isAutoscrollActive) {
+                const mode = scrollModeSelect.value;
+                localStorage.setItem('reader_last_position', mode === 'paged-horizontal' ? reader.scrollLeft : reader.scrollTop);
+            }
+        }, 150);
+    });
+
+    scrollModeSelect.addEventListener('change', (e) => { 
+        setScrollMode(e.target.value); 
+        localStorage.setItem('reader_scroll_mode', e.target.value); 
+        stopAutoscroll(); 
+        autoscrollToggle.checked = false; 
+        reader.scrollTo(0,0); 
+    });
+
+    chapterSelect.addEventListener('change', (e) => { 
+        localStorage.setItem('reader_last_chapter', e.target.value); 
+        localStorage.setItem('reader_last_position', 0); 
+        stopAutoscroll(); 
+        autoscrollToggle.checked = false; 
+        loadChapterPages(e.target.value); 
+    });
+
+    bgColorSelect.addEventListener('change', (e) => {
+        document.body.style.backgroundColor = e.target.value;
+        document.querySelectorAll('.page-block').forEach(block => {
+            block.style.backgroundColor = e.target.value;
+        });
+    });
+
+    autoscrollToggle.addEventListener('change', (e) => {
+        isAutoscrollActive = e.target.checked;
+        if (isAutoscrollActive) startAutoscroll(); else stopAutoscroll();
+    });
+
+    searchBtn.addEventListener('click', () => searchManga(searchInput.value));
+    searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') searchManga(searchInput.value); });
+
+    function setScrollMode(mode) { 
+        reader.classList.remove('mode-webtoon', 'mode-paged-vertical', 'mode-paged-horizontal');
+        reader.classList.add(`mode-${mode}`);
+        setTimeout(updateProgressIndicators, 50); 
+    }
+
     if ('serviceWorker' in navigator) { 
         navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err)); 
     }
+
     const savedMode = localStorage.getItem('reader_scroll_mode') || 'webtoon';
     scrollModeSelect.value = savedMode;
     setScrollMode(savedMode);
+
     closeSettings();
 });
