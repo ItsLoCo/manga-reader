@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zero-reader-v24'; // <-- Версия обновлена
+const CACHE_NAME = 'zero-reader-v25'; // <-- Версия обновлена
 const ASSETS = [
   './',
   'index.html',
