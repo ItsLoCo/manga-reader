@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
-    const API_BASE = 'https://api.comick.io';
+    const API_BASE = 'https://empty-firefly-874a.niko-rad3.workers.dev/?url=' + encodeURIComponent('https://api.comick.io');
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
