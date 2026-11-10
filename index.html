@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Reader">
+    <link rel="apple-touch-icon" href="icon-180.png">
     <meta name="theme-color" content="#000000">
     <title>Reader</title>
     <link rel="stylesheet" href="style.css">
@@ -47,12 +49,16 @@
     </div>
 
     <div id="reader-screen" class="hidden">
+        <div id="reader-top" class="nav-hidden" role="button" aria-label="Страница тайтла">
+            <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+            <div class="rt-text"><div id="rt-title"></div><div id="rt-chap"></div></div>
+        </div>
         <div id="reader" class="mode-webtoon"></div>
         <div id="reader-navigation" class="nav-hidden">
-            <button id="nav-prev" class="nav-btn-mini" title="Назад">◀</button>
-            <button id="nav-top" class="nav-btn-mini" title="В начало">🔝</button>
-            <button id="nav-settings" class="nav-btn-mini style-gear" title="Настройки">⚙️</button>
-            <button id="nav-next" class="nav-btn-mini" title="Вперед">▶</button>
+            <button id="nav-prev" class="nav-btn-mini" aria-label="Предыдущая глава"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button id="nav-top" class="nav-btn-mini" aria-label="В начало главы"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            <button id="nav-settings" class="nav-btn-mini style-gear" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+            <button id="nav-next" class="nav-btn-mini" aria-label="Следующая глава"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
     </div>
 
