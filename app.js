@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     // --- ЭЛЕМЕНТЫ ИНТЕРФЕЙСА ---
     const startScreen = document.getElementById('start-screen');
     const readerScreen = document.getElementById('reader-screen');
@@ -27,26 +27,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- СОСТОЯНИЕ ---
     let chaptersList = []; 
-    let currentSourceId = null;
-    let currentMangaUrl = null;
+    let currentMangaSlug = null;
     let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
     const SWIPE_THRESHOLD = 60; 
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
-
-    // --- ИНИЦИАЛИЗАЦИЯ NYORA ---
-    let client;
-    let selectedSource;
-    try {
-        client = new Nyora(); 
-        const sources = await client.sources.list();
-        // Выбираем первый доступный источник (Nyora сам проверяет, какие живы)
-        // Если хочешь именно русский, можно поискать: sources.find(s => s.language === 'ru') || sources[0]
-        selectedSource = sources[0]; 
-        console.log('Используем источник:', selectedSource.name);
-    } catch (e) {
-        console.error("Ошибка инициализации Nyora:", e);
-        searchResults.innerHTML = '<div class="search-item" style="color:red;">Ошибка подключения к сервису</div>';
-    }
+    
+    // --- КОНСТАНТЫ ---
+    const API_BASE = 'https://api.comick.io';
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -115,10 +102,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         handleTouchGestures();
     }
 
-    if (readerScreen) {
-        readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
-        readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
-    }
+    readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
+    readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
 
     function handleTouchGestures() {
         const diffX = touchStartX - touchEndX;
@@ -162,34 +147,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ОСНОВНАЯ ЛОГИКА NYORA ====================
+    // ==================== ЛОГИКА COMICK ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
-        if (!query.trim() || !selectedSource) return;
+        if (!query.trim()) return;
         searchBtn.textContent = "Ищу...";
         searchBtn.disabled = true;
         searchResults.innerHTML = "";
         searchResults.classList.remove('hidden');
         
         try {
-            const hits = await client.manga.search(selectedSource.id, query);
-            
+            const response = await fetch(`${API_BASE}/v1.0/search?q=${encodeURIComponent(query)}&limit=15`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
             searchResults.innerHTML = '';
-            if (!hits.entries || hits.entries.length === 0) {
+            if (!data || data.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                hits.entries.forEach(manga => {
+                data.forEach(manga => {
                     const item = document.createElement('div');
                     item.className = 'search-item';
-                    item.textContent = manga.title || 'Без названия';
-                    
+                    item.textContent = manga.title || manga.slug;
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
-                        currentSourceId = selectedSource.id;
-                        currentMangaUrl = manga.url;
-                        loadChaptersForManga(manga.url);
+                        currentMangaSlug = manga.slug;
+                        loadChaptersForManga(manga.slug);
                     });
                     searchResults.appendChild(item);
                 });
@@ -203,22 +188,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
-    async function loadChaptersForManga(mangaUrl) {
+    // 2. ЗАГРУЗКА ГЛАВ
+    async function loadChaptersForManga(slug) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            const details = await client.manga.details(currentSourceId, mangaUrl);
-            
-            if (!details.chapters || details.chapters.length === 0) {
-                throw new Error("Главы не найдены");
+            const response = await fetch(`${API_BASE}/v1.0/comic/${slug}/chapters?lang=ru`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            if (!data || !data.chapters || data.chapters.length === 0) {
+                throw new Error("Русские главы не найдены");
             }
 
-            chaptersList = details.chapters.map(ch => ({
-                id: ch.url,
-                title: `${ch.title || 'Глава'} ${ch.number || '?'}`
+            chaptersList = data.chapters.map(ch => ({
+                id: ch.hid,
+                title: `Глава ${ch.chap || '?'}`
             }));
 
             chapterSelect.innerHTML = '';
@@ -243,24 +230,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 3. ЗАГРУЗКА СТРАНИЦ
-    async function loadChapterPages(chapterUrl) {
+    async function loadChapterPages(chapterId) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            const pages = await client.manga.pages(currentSourceId, chapterUrl);
-            
-            if (!pages || pages.length === 0) {
-                throw new Error("В главе нет страниц");
-            }
+            const response = await fetch(`${API_BASE}/v1.0/chapter/${chapterId}?tachiyomi=true`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            const pages = data.chapter.images;
+            if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
+
+            const baseUrl = 'https://meo.comick.pictures/';
 
             reader.innerHTML = '';
-
             const observer = new IntersectionObserver((entries) => { 
                 entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('fade-in'); observer.unobserve(e.target); } }); 
             }, { root: reader, threshold: 0.05 });
 
-            pages.forEach((pageUrl, index) => {
+            pages.forEach((pageData, index) => {
+                const imageUrl = baseUrl + pageData.b2key + '.' + pageData.name.split('.').pop();
+
                 const pageBlock = document.createElement('div');
                 pageBlock.className = 'page-block';
                 pageBlock.style.width = '100vw';
@@ -273,7 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 pageBlock.style.transition = 'opacity 0.4s ease';
 
                 const img = document.createElement('img');
-                img.src = pageUrl;
+                img.src = imageUrl;
                 img.alt = `Страница ${index + 1}`;
                 img.style.width = '100%';
                 img.style.maxWidth = '100vw';
@@ -285,7 +276,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 pageBlock.appendChild(img);
                 reader.appendChild(pageBlock);
                 observer.observe(pageBlock);
-
                 img.onload = () => { pageBlock.style.opacity = '1'; };
             });
 
