@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // --- КОНСТАНТЫ ---
     // 🔑 СЮДА ВСТАВЬ СВОЮ ЗАШИФРОВАННУЮ СТРОКУ (из шага 1)
-    const ENCODED_KEYS = 'СЮДА_ВСТАВЬ_ЗАШИФРОВАННУЮ_СТРОКУ';
+    const ENCODED_KEYS = 'cGVyc29uYWwtY2xpZW50LTc5NDYyYmFiLTk1ODEtNGU2ZC05MzJlLTI3YjdiOGI2NDk5Zi04NGYzYzQ4ZiUzQWlFNmFxRUliVFY2WDc0MDVRRHRHN0NHQmMyeTlTMkFJJTNBbG9jbzY3JTNBa2hhcmJhbGFraA==';
 
     // --- ИНИЦИАЛИЗАЦИЯ MANGADEX SDK ---
     let client;
