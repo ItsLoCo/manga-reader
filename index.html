@@ -8,10 +8,13 @@
     <title>Zero-Frame Manga Reader</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    
+    <!-- Подключаем Nyora SDK (облачный агрегатор) -->
+    <script src="https://cdn.jsdelivr.net/npm/nyora-sdk@2.0.3/dist/index.min.js"></script>
 </head>
 <body>
 
-    <!-- Линия индикатора прогресса главы под Dynamic Island -->
+    <!-- Линия индикатора прогресса главы -->
     <div id="progress-bar-container">
         <div id="progress-bar"></div>
     </div>
@@ -22,7 +25,7 @@
             <h1 class="logo-text">ZERO<span>READER</span></h1>
             <p class="sub-text">Твоя ультимативная читалка манхвы</p>
             
-            <!-- Красивая поисковая строка по центру -->
+            <!-- Поисковая строка -->
             <div class="main-search-box">
                 <input type="text" id="search-input" placeholder="Введите название манги...">
                 <button id="search-btn">Найти 🔍</button>
@@ -33,15 +36,15 @@
         </div>
     </div>
 
-    <!-- 2. ЭКРАН ЧТЕНИЯ (По умолчанию пустой и скрытый) -->
+    <!-- 2. ЭКРАН ЧТЕНИЯ -->
     <div id="reader-screen" class="hidden">
-        <!-- Невидимый триггер по центру для вызова кнопок -->
+        <!-- Невидимый триггер по центру -->
         <div id="menu-trigger"></div>
 
-        <!-- Контейнер для фреймов/страниц -->
+        <!-- Контейнер для страниц -->
         <div id="reader" class="mode-webtoon"></div>
 
-        <!-- Минималистичная всплывающая панель управления -->
+        <!-- Панель управления -->
         <div id="reader-navigation" class="nav-hidden">
             <button id="nav-prev" class="nav-btn-mini" title="Назад">◀</button>
             <button id="nav-top" class="nav-btn-mini" title="В начало">🔝</button>
@@ -50,7 +53,7 @@
         </div>
     </div>
 
-    <!-- 3. ОКНО ОСТАЛЬНЫХ НАСТРОЕК -->
+    <!-- 3. ОКНО НАСТРОЕК -->
     <div id="settings-menu" class="hidden">
         <h3>Настройки чтения</h3>
         
