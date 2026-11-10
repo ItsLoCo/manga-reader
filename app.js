@@ -33,30 +33,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAutoscrollActive = false, autoscrollInterval = null, userInteracting = false, userInteractionTimeout = null;
     
     // --- КОНСТАНТЫ ---
+    // Твоя зашифрованная строка с ключами
     const ENCODED_KEYS = 'cGVyc29uYWwtY2xpZW50LTc5NDYyYmFiLTk1ODEtNGU2ZC05MzJlLTI3YjdiOGI2NDk5Zi04NGYzYzQ4ZiUzQWlFNmFxRUliVFY2WDc0MDVRRHRHN0NHQmMyeTlTMkFJJTNBbG9jbzY3JTNBa2hhcmJhbGFraA==';
 
     // --- ИНИЦИАЛИЗАЦИЯ MANGADEX SDK ---
-    let client;
+    let isAuthorized = false;
     try {
-        // Подключаем библиотеку (она должна быть добавлена в index.html)
-        client = new MangaDexClient();
-        
         // Расшифровываем ключи
         const decoded = decodeURIComponent(atob(ENCODED_KEYS));
         const [clientId, clientSecret, username, password] = decoded.split(':');
 
-        // Логинимся
-        await client.login({
+        // Правильный вызов авторизации согласно документации библиотеки
+        await loginPersonal({
             clientId: clientId,
             clientSecret: clientSecret,
             username: username,
             password: password
         });
+        isAuthorized = true;
         console.log('Успешная авторизация в MangaDex');
     } catch (err) {
         console.error('Ошибка авторизации:', err);
-        searchResults.innerHTML = '<div class="search-item" style="color:red;">Ошибка входа. Проверьте ключи.</div>';
-        return; 
+        if (searchResults) {
+            searchResults.innerHTML = '<div class="search-item" style="color:red;">Ошибка входа. Проверьте ключи или соединение.</div>';
+        }
     }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
@@ -110,6 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (autoscrollInterval) cancelAnimationFrame(autoscrollInterval);
     }
 
+    // --- СВАЙПЫ ---
     function handleTouchStart(e) {
         userInteracting = true; 
         clearTimeout(userInteractionTimeout);
@@ -125,8 +126,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         handleTouchGestures();
     }
 
-    readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
-    readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
+    if (readerScreen) {
+        readerScreen.addEventListener('touchstart', handleTouchStart, { passive: true });
+        readerScreen.addEventListener('touchend', handleTouchEnd, { passive: true });
+    }
 
     function handleTouchGestures() {
         const diffX = touchStartX - touchEndX;
@@ -143,6 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // --- ПЕРЕКЛЮЧЕНИЕ ГЛАВ ---
     async function switchChapter(index) {
         if (index < 0 || index >= chapterSelect.options.length) return;
         chapterSelect.selectedIndex = index;
@@ -160,6 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (wasAutoscroll) setTimeout(startAutoscroll, 1000);
     }
 
+    // --- УПРАВЛЕНИЕ НАВИГАЦИЕЙ ---
     navTopBtn.addEventListener('click', () => { 
         reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); 
         localStorage.setItem('reader_last_position', 0); 
@@ -168,38 +173,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     navPrevBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex - 1));
     navNextBtn.addEventListener('click', () => switchChapter(chapterSelect.selectedIndex + 1));
 
-    // ==================== ЛОГИКА MANGADEX ====================
+    // ==================== ОСНОВНАЯ ЛОГИКА MANGADEX ====================
 
     // 1. ПОИСК
     async function searchManga(query) {
         if (!query.trim()) return;
+        if (!isAuthorized) {
+            searchResults.innerHTML = '<div class="search-item" style="color:red;">Авторизация не удалась. Проверьте консоль.</div>';
+            return;
+        }
         searchBtn.textContent = "Ищу...";
         searchBtn.disabled = true;
         searchResults.innerHTML = "";
         searchResults.classList.remove('hidden');
         
         try {
-            // Ищем с сортировкой по релевантности и просим обложки
-            const mangaList = await client.manga.search({
+            // Правильный вызов поиска через класс Manga
+            const mangas = await Manga.search({
                 title: query,
-                limit: 15,
-                order: { relevance: 'desc' },
-                includes: ['cover_art']
+                limit: 15
             });
 
             searchResults.innerHTML = '';
             
-            // Проверяем, где лежат результаты (в results или в data)
-            const results = mangaList.results || mangaList.data || [];
-            
-            if (results.length === 0) {
+            if (!mangas || mangas.length === 0) {
                 searchResults.innerHTML = '<div class="search-item">Ничего не найдено</div>';
             } else {
-                results.forEach(manga => {
-                    const title = getMangaTitle(manga);
+                mangas.forEach(manga => {
+                    // Безопасное извлечение названия
+                    let title = 'Без названия';
+                    if (manga.localTitle) title = manga.localTitle;
+                    else if (manga.attributes && manga.attributes.title) {
+                        title = manga.attributes.title.ru || manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Без названия';
+                    }
+
                     const item = document.createElement('div');
                     item.className = 'search-item';
                     item.textContent = title;
+                    
                     item.addEventListener('click', () => {
                         searchResults.classList.add('hidden');
                         searchInput.value = "";
@@ -218,35 +229,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function getMangaTitle(manga) {
-        const attrs = manga.attributes;
-        if (attrs.title.ru) return attrs.title.ru;
-        if (attrs.title.en) return attrs.title.en;
-        const titleKeys = Object.keys(attrs.title);
-        if (titleKeys.length > 0) return attrs.title[titleKeys[0]];
-        return 'Без названия';
-    }
-
-    // 2. ЗАГРУЗКА ГЛАВ
+    // 2. ЗАГРУЗКА СПИСКА ГЛАВ
     async function loadChaptersForManga(mangaId) {
         startScreen.classList.add('hidden');
         readerScreen.classList.remove('hidden');
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка списка глав...</div>`;
 
         try {
-            const feed = await client.manga.getFeed(mangaId, {
+            const manga = await Manga.get(mangaId);
+            const feed = await manga.getFeed({
                 translatedLanguage: ['ru', 'en'],
                 order: { chapter: 'asc' },
                 limit: 500
             });
 
-            if (!feed.results || feed.results.length === 0) {
+            if (!feed || feed.length === 0) {
                 throw new Error("Главы не найдены");
             }
 
-            chaptersList = feed.results.map(ch => {
-                const lang = ch.attributes.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
-                const chapterNum = ch.attributes.chapter || '?';
+            chaptersList = feed.map(ch => {
+                const lang = ch.translatedLanguage === 'ru' ? '[RU]' : '[EN]';
+                const chapterNum = ch.chapter || '?';
                 return {
                     id: ch.id,
                     title: `${lang} Глава ${chapterNum}`
@@ -274,13 +277,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 3. ЗАГРУЗКА СТРАНИЦ
+    // 3. ЗАГРУЗКА СТРАНИЦ ГЛАВЫ
     async function loadChapterPages(chapterId) {
         reader.innerHTML = `<div style="color:gray; text-align:center; padding:20px;">Загрузка страниц...</div>`;
         progressBar.style.width = '0%';
 
         try {
-            const pages = await client.chapter.getPages(chapterId);
+            const chapter = await Chapter.get(chapterId);
+            const pages = await chapter.getReadablePages();
 
             if (!pages || pages.length === 0) throw new Error("В главе нет страниц");
 
@@ -328,6 +332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // --- ВОССТАНОВЛЕНИЕ ПОЗИЦИИ ---
     function restoreScrollPosition() {
         const pos = parseFloat(localStorage.getItem('reader_last_position') || '0');
         if (pos > 0) {
