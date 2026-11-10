@@ -8,43 +8,30 @@
     <title>Zero-Frame Manga Reader</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
-    
-    <!-- Подключаем Nyora SDK (облачный агрегатор) -->
-    <script src="https://cdn.jsdelivr.net/npm/nyora-sdk@2.0.3/dist/index.min.js"></script>
 </head>
 <body>
 
-    <!-- Линия индикатора прогресса главы -->
     <div id="progress-bar-container">
         <div id="progress-bar"></div>
     </div>
 
-    <!-- 1. ГЛАВНАЯ СТАРТОВАЯ СТРАНИЦА -->
     <div id="start-screen">
         <div class="welcome-container">
             <h1 class="logo-text">ZERO<span>READER</span></h1>
             <p class="sub-text">Твоя ультимативная читалка манхвы</p>
             
-            <!-- Поисковая строка -->
             <div class="main-search-box">
                 <input type="text" id="search-input" placeholder="Введите название манги...">
                 <button id="search-btn">Найти 🔍</button>
             </div>
             
-            <!-- Список найденных результатов -->
             <div id="search-results" class="hidden"></div>
         </div>
     </div>
 
-    <!-- 2. ЭКРАН ЧТЕНИЯ -->
     <div id="reader-screen" class="hidden">
-        <!-- Невидимый триггер по центру -->
         <div id="menu-trigger"></div>
-
-        <!-- Контейнер для страниц -->
         <div id="reader" class="mode-webtoon"></div>
-
-        <!-- Панель управления -->
         <div id="reader-navigation" class="nav-hidden">
             <button id="nav-prev" class="nav-btn-mini" title="Назад">◀</button>
             <button id="nav-top" class="nav-btn-mini" title="В начало">🔝</button>
@@ -53,15 +40,12 @@
         </div>
     </div>
 
-    <!-- 3. ОКНО НАСТРОЕК -->
     <div id="settings-menu" class="hidden">
         <h3>Настройки чтения</h3>
-        
         <div class="stats-box">
             <div>Глава: <span id="chapter-pct">0%</span></div>
             <div>Манга: <span id="manga-pct">0%</span></div>
         </div>
-        
         <div class="setting-item">
             <label>Режим прокрутки:</label>
             <select id="scroll-mode">
@@ -70,12 +54,10 @@
                 <option value="paged-horizontal">Постранично (Горизонтально)</option>
             </select>
         </div>
-        
         <div class="setting-item">
             <label>Текущая глава:</label>
             <select id="chapter-select"></select>
         </div>
-
         <div class="setting-item">
             <label>Цвет фона:</label>
             <select id="bg-color">
@@ -84,17 +66,14 @@
                 <option value="#1a1a1a">Темно-серый</option>
             </select>
         </div>
-
         <div class="setting-item border-top">
             <label for="autoscroll-toggle">Автоматический скролл:</label>
             <input type="checkbox" id="autoscroll-toggle">
         </div>
-
         <div class="setting-item">
             <label for="autoscroll-speed">Скорость скролла:</label>
             <input type="range" id="autoscroll-speed" min="1" max="10" value="3">
         </div>
-        
         <button id="close-menu">Вернуться к чтению</button>
     </div>
 
