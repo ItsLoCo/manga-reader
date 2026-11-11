@@ -20,6 +20,14 @@
 <div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
 <button id="auth-btn" class="pill">Войти</button>
 </header>
+<nav id="tabs" class="tabs">
+<button class="tabbtn on" id="tb-home" data-tab="home">Главная</button>
+<button class="tabbtn" id="tb-catalog" data-tab="catalog">Каталог</button>
+<button class="tabbtn" id="tb-submit" data-tab="submit">Предложить</button>
+<button class="tabbtn" id="tb-profile" data-tab="profile">Профиль</button>
+<button class="tabbtn hidden" id="tb-mod" data-tab="mod">Модерация</button>
+</nav>
+<div id="tab-home">
 <div class="main-search-box">
 <input type="text" id="search-input" placeholder="Название манги или манхвы...">
 <button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
@@ -31,6 +39,64 @@
 <button id="more" class="pill more hidden">Показать ещё</button>
 </div>
 <div id="home"></div>
+</div>
+
+<div id="tab-catalog" class="tab hidden">
+<div class="main-search-box">
+<input type="text" id="cat-q" placeholder="Поиск по библиотеке Reader...">
+<button id="cat-btn">Найти</button>
+</div>
+<p class="note">Произведения, которые добавили читатели Reader.</p>
+<div id="cat-grid" class="grid"></div>
+<button id="cat-more" class="pill more hidden">Показать ещё</button>
+</div>
+
+<div id="tab-submit" class="tab hidden">
+<div class="seg"><button id="sub-t1" class="on">Новое произведение</button><button id="sub-t2">Новая глава</button></div>
+<div id="sub-gate" class="pcard hidden">
+<p>Чтобы предлагать произведения и главы, войди в аккаунт.</p>
+<button id="sub-login" class="btn">Войти</button>
+</div>
+<div id="sub-title-form">
+<label for="st-title">Название</label>
+<input id="st-title" maxlength="120" placeholder="Название произведения">
+<label for="st-desc">Описание</label>
+<textarea id="st-desc" maxlength="2000" rows="5" placeholder="О чём это произведение"></textarea>
+<label for="st-cover">Обложка (JPG, PNG, WebP до 3 МБ)</label>
+<input type="file" id="st-cover" accept="image/jpeg,image/png,image/webp">
+<p id="st-msg" class="fmsg"></p>
+<button id="st-send" class="btn">Отправить на проверку</button>
+<p class="note">Все произведения проходят проверку модератором. Загружай только то, что имеешь право распространять.</p>
+</div>
+<div id="sub-chap-form" class="hidden">
+<label for="sc-title">Произведение</label>
+<select id="sc-title"></select>
+<label for="sc-num">Номер главы</label>
+<input id="sc-num" inputmode="decimal" placeholder="Например, 12 или 12.5">
+<label for="sc-name">Название главы (необязательно)</label>
+<input id="sc-name" maxlength="120">
+<label for="sc-files">Файлы: ZIP, CBZ или картинки</label>
+<input type="file" id="sc-files" multiple accept=".zip,.cbz,image/jpeg,image/png,image/webp">
+<progress id="sc-prog" class="hidden" max="100" value="0"></progress>
+<p id="sc-msg" class="fmsg"></p>
+<button id="sc-send" class="btn">Загрузить главу</button>
+<p class="note">До 200 страниц, каждая до 8 МБ. Глава появится после проверки модератором.</p>
+</div>
+</div>
+
+<div id="tab-profile" class="tab hidden"><div id="prof-body"></div></div>
+
+<div id="tab-mod" class="tab hidden">
+<h4 class="sh">Заявки на проверку</h4>
+<div id="mod-list"></div>
+<div id="mod-admin" class="pcard hidden">
+<h3>Роли пользователей</h3>
+<input id="ma-user" placeholder="Логин пользователя" autocapitalize="none">
+<select id="ma-role"><option value="user">Читатель</option><option value="moderator">Модератор</option><option value="admin">Администратор</option></select>
+<p id="ma-msg" class="fmsg"></p>
+<button id="ma-send" class="btn">Назначить роль</button>
+</div>
+</div>
 <footer class="by">by LoCo</footer>
 </div>
 
