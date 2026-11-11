@@ -1,124 +1,124 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Reader">
-    <link rel="apple-touch-icon" href="icon-180.png">
-    <meta name="theme-color" content="#000000">
-    <title>Reader</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reader">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#000000">
+<title>Reader</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
 </head>
 <body>
-    <div id="progress-bar-container"><div id="progress-bar"></div></div>
+<div id="progress-bar-container"><div id="progress-bar"></div></div>
 
-    <div id="start-screen">
-        <header class="top">
-            <div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
-            <button id="auth-btn" class="pill">Войти</button>
-        </header>
-        <div class="main-search-box">
-            <input type="text" id="search-input" placeholder="Название манги или манхвы...">
-            <button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
-            <button id="search-btn">Найти</button>
-        </div>
-        <div id="results" class="hidden">
-            <div class="rh"><span id="rcount"></span><button id="rclose" class="pill">Закрыть</button></div>
-            <div id="grid" class="grid"></div>
-            <button id="more" class="pill more hidden">Показать ещё</button>
-        </div>
-        <div id="home"></div>
-        <footer class="by">by LoCo</footer>
-    </div>
+<div id="start-screen">
+<header class="top">
+<div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
+<button id="auth-btn" class="pill">Войти</button>
+</header>
+<div class="main-search-box">
+<input type="text" id="search-input" placeholder="Название манги или манхвы...">
+<button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
+<button id="search-btn">Найти</button>
+</div>
+<div id="results" class="hidden">
+<div class="rh"><span id="rcount"></span><button id="rclose" class="pill">Закрыть</button></div>
+<div id="grid" class="grid"></div>
+<button id="more" class="pill more hidden">Показать ещё</button>
+</div>
+<div id="home"></div>
+<footer class="by">by LoCo</footer>
+</div>
 
-    <div id="detail-screen" class="hidden">
-        <button id="d-back" class="pill">← Назад</button>
-        <div class="d-head">
-            <img id="d-cover" alt="">
-            <div><h2 id="d-title"></h2><p id="d-meta"></p><p id="d-ru" class="d-ru"></p><div id="d-tags"></div></div>
-        </div>
-        <p id="d-desc"></p>
-        <button id="d-read">Читать</button>
-        <div class="d-btns">
-            <button id="d-plan" class="ghost">Хочу прочитать</button>
-            <button id="d-done" class="ghost">Прочитано</button>
-        </div>
-    </div>
+<div id="detail-screen" class="hidden">
+<button id="d-back" class="pill">← Назад</button>
+<div class="d-head">
+<img id="d-cover" alt="">
+<div><h2 id="d-title"></h2><p id="d-meta"></p><p id="d-ru" class="d-ru"></p><div id="d-tags"></div></div>
+</div>
+<p id="d-desc"></p>
+<button id="d-read">Читать</button>
+<div class="d-btns">
+<button id="d-plan" class="ghost">Хочу прочитать</button>
+<button id="d-done" class="ghost">Прочитано</button>
+</div>
+</div>
 
-    <div id="reader-screen" class="hidden">
-        <div id="reader-top" class="nav-hidden" role="button" aria-label="Страница тайтла">
-            <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-            <div class="rt-text"><div id="rt-title"></div><div id="rt-chap"></div></div>
-        </div>
-        <div id="reader" class="mode-webtoon"></div>
-        <div id="reader-navigation" class="nav-hidden">
-            <button id="nav-prev" class="nav-btn-mini" aria-label="Предыдущая глава"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-            <button id="nav-top" class="nav-btn-mini" aria-label="В начало главы"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-            <button id="nav-settings" class="nav-btn-mini style-gear" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
-            <button id="nav-next" class="nav-btn-mini" aria-label="Следующая глава"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
-        </div>
-    </div>
+<div id="reader-screen" class="hidden">
+<div id="reader-top" class="nav-hidden" role="button" aria-label="Страница тайтла">
+<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+<div class="rt-text"><div id="rt-title"></div><div id="rt-chap"></div></div>
+</div>
+<div id="reader" class="mode-webtoon"></div>
+<div id="reader-navigation" class="nav-hidden">
+<button id="nav-prev" class="nav-btn-mini" aria-label="Предыдущая глава"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+<button id="nav-top" class="nav-btn-mini" aria-label="В начало главы"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+<button id="nav-settings" class="nav-btn-mini style-gear" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+<button id="nav-next" class="nav-btn-mini" aria-label="Следующая глава"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+</div>
+</div>
 
-    <div id="settings-menu">
-        <h3>Настройки чтения</h3>
-        <div class="stats-box">
-            <div>Глава: <span id="chapter-pct">0%</span></div>
-            <div>Манга: <span id="manga-pct">0%</span></div>
-        </div>
-        <div class="setting-item">
-            <label>Режим прокрутки:</label>
-            <select id="scroll-mode">
-                <option value="webtoon">Вертикальная лента</option>
-                <option value="paged-vertical">Постранично (вертикально)</option>
-                <option value="paged-horizontal">Постранично (горизонтально)</option>
-            </select>
-        </div>
-        <div class="setting-item">
-            <label>Глава:</label>
-            <select id="chapter-select"></select>
-        </div>
-        <div class="setting-item">
-            <label>Цвет фона:</label>
-            <select id="bg-color">
-                <option value="#000000">Чёрный</option>
-                <option value="#0b1220">Тёмно-синий</option>
-                <option value="#ffffff">Белый</option>
-            </select>
-        </div>
-        <div class="setting-item border-top">
-            <label for="autoscroll-toggle">Автоскролл:</label>
-            <input type="checkbox" id="autoscroll-toggle">
-        </div>
-        <div class="setting-item">
-            <label for="autoscroll-speed">Скорость:</label>
-            <input type="range" id="autoscroll-speed" min="1" max="10" value="3">
-        </div>
-        <button id="close-menu">Вернуться к чтению</button>
-        <button id="home-btn" class="ghost">На главную</button>
-    </div>
+<div id="settings-menu">
+<h3>Настройки чтения</h3>
+<div class="stats-box">
+<div>Глава: <span id="chapter-pct">0%</span></div>
+<div>Манга: <span id="manga-pct">0%</span></div>
+</div>
+<div class="setting-item">
+<label>Режим прокрутки:</label>
+<select id="scroll-mode">
+<option value="webtoon">Вертикальная лента</option>
+<option value="paged-vertical">Постранично (вертикально)</option>
+<option value="paged-horizontal">Постранично (горизонтально)</option>
+</select>
+</div>
+<div class="setting-item">
+<label>Глава:</label>
+<select id="chapter-select"></select>
+</div>
+<div class="setting-item">
+<label>Цвет фона:</label>
+<select id="bg-color">
+<option value="#000000">Чёрный</option>
+<option value="#151515">Тёмно-синий</option>
+<option value="#ffffff">Белый</option>
+</select>
+</div>
+<div class="setting-item border-top">
+<label for="autoscroll-toggle">Автоскролл:</label>
+<input type="checkbox" id="autoscroll-toggle">
+</div>
+<div class="setting-item">
+<label for="autoscroll-speed">Скорость:</label>
+<input type="range" id="autoscroll-speed" min="1" max="10" value="3">
+</div>
+<button id="close-menu">Вернуться к чтению</button>
+<button id="home-btn" class="ghost">На главную</button>
+</div>
 
-    <div id="sheet-bg" class="hidden"></div>
-    <div id="filter-sheet">
-        <div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
-        <div id="fs-body"></div>
-        <div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
-    </div>
+<div id="sheet-bg" class="hidden"></div>
+<div id="filter-sheet">
+<div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
+<div id="fs-body"></div>
+<div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
+</div>
 
-    <div id="auth-modal" class="hidden">
-        <div class="auth-box">
-            <h3>Аккаунт</h3>
-            <input id="auth-user" placeholder="Логин" autocomplete="username" autocapitalize="none">
-            <input id="auth-pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password">
-            <p id="auth-msg"></p>
-            <button id="auth-login">Войти</button>
-            <button id="auth-register" class="ghost">Создать аккаунт</button>
-            <button id="auth-close" class="ghost">Закрыть</button>
-        </div>
-    </div>
+<div id="auth-modal" class="hidden">
+<div class="auth-box">
+<h3>Аккаунт</h3>
+<input id="auth-user" placeholder="Логин" autocomplete="username" autocapitalize="none">
+<input id="auth-pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password">
+<p id="auth-msg"></p>
+<button id="auth-login">Войти</button>
+<button id="auth-register" class="ghost">Создать аккаунт</button>
+<button id="auth-close" class="ghost">Закрыть</button>
+</div>
+</div>
 
-    <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
