@@ -6,7 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressBar = $('progress-bar'), searchInput = $('search-input'), toggle = $('autoscroll-toggle');
     const mode = () => $('scroll-mode').value;
     // реальная высота экрана (работает и при сворачивании панелей браузера, и на старых телефонах)
-    const setH = () => document.documentElement.style.setProperty('--app-h', (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px');
+    const setH = () => {
+        let h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        // iPhone в режиме «На экран Домой»: браузер может сообщать высоту на высоту статус-бара меньше реальной
+        const app = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+        if (app && window.innerHeight >= window.innerWidth && window.screen && screen.height > h && screen.height - h < 140) h = screen.height;
+        document.documentElement.style.setProperty('--app-h', h + 'px');
+    };
     setH(); window.addEventListener('resize', setH);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', setH);
 
@@ -87,7 +93,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------- Аккаунт ----------
-    const renderAuth = () => { $('auth-btn').textContent = user ? '👤 ' + user + (me && me.role && me.role !== 'user' ? ' · ' + me.role : '') : 'Войти'; };
+    const renderAuth = () => {
+        $('auth-btn').textContent = user ? '👤 ' + user + (me && me.role && me.role !== 'user' ? ' · ' + me.role : '') : 'Войти';
+        const staff = !!(me && ['moderator', 'admin'].includes(me.role));
+        $('tb-mod').classList.toggle('hidden', !staff);
+        if (!staff && tab === 'mod') showTab('home');
+        if (tab === 'profile') renderProfile();
+        if (tab === 'submit') initSubmit();
+    };
     async function loadMe() {
         if (!token) { me = null; renderAuth(); return; }
         try { me = await call({ action: 'me' }, { headers: { Authorization: 'Bearer ' + token } }); } catch { me = null; }
@@ -104,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { m.textContent = e.message; }
     }
     $('auth-btn').onclick = () => {
-        if (user) { if (confirm('Выйти из аккаунта? Прогресс останется на сервере.')) logout(); }
+        if (user) showTab('profile');
         else $('auth-modal').classList.remove('hidden');
     };
     $('auth-login').onclick = () => authDo('login');
@@ -471,6 +484,230 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && manga && !restoring && view === 'reader') { saveProgress(); syncNow(); }
     });
+
+    // ---------- Разделы: каталог, предложить, профиль, модерация ----------
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+    const api = (params, opts = {}) => call(params, { ...opts, headers: { ...(opts.headers || {}), ...(token ? { Authorization: 'Bearer ' + token } : {}) } });
+    const postForm = (action, fd) => call({ action }, { method: 'POST', headers: token ? { Authorization: 'Bearer ' + token } : {}, body: fd });
+    async function blobUrl(url) {
+        const r = await fetch(url, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return URL.createObjectURL(await r.blob());
+    }
+    const ST_RU = { pending: 'На проверке', approved: 'Одобрено', rejected: 'Отклонено', revision: 'Нужны правки' };
+    const ROLE_RU = { user: 'Читатель', moderator: 'Модератор', admin: 'Администратор' };
+    let tab = 'home', subMode = 1, catOff = 0, catQ = '';
+
+    function showTab(t) {
+        tab = t;
+        ['home', 'catalog', 'submit', 'profile', 'mod'].forEach(n => {
+            $('tab-' + n).classList.toggle('hidden', n !== t);
+            $('tb-' + n).classList.toggle('on', n === t);
+        });
+        startScreen.scrollTop = 0;
+        if (t === 'catalog') loadCatalog(true);
+        if (t === 'submit') initSubmit();
+        if (t === 'profile') renderProfile();
+        if (t === 'mod') loadQueue();
+    }
+    [...document.querySelectorAll('.tabbtn')].forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
+
+    // каталог библиотеки Reader
+    async function loadCatalog(reset) {
+        const g = $('cat-grid');
+        if (reset) { catOff = 0; g.textContent = 'Загрузка…'; $('cat-more').classList.add('hidden'); }
+        try {
+            const d = await call({ action: 'lib_list', offset: catOff, q: catQ });
+            if (reset) g.textContent = '';
+            if (reset && !d.entries.length) { const m = el('div', 'gmsg', catQ ? 'Ничего не найдено' : 'Пока нет произведений. Предложи первое!'); g.append(m); }
+            d.entries.forEach(x => g.append(card(norm(x))));
+            catOff += d.entries.length; $('cat-more').classList.toggle('hidden', d.entries.length < 30);
+        } catch (e) { if (reset) g.textContent = 'Ошибка: ' + e.message; }
+    }
+    $('cat-btn').onclick = () => { catQ = $('cat-q').value.trim(); loadCatalog(true); };
+    $('cat-q').addEventListener('keypress', e => { if (e.key === 'Enter') $('cat-btn').click(); });
+    $('cat-more').onclick = () => loadCatalog(false);
+
+    // предложить произведение или главу
+    function initSubmit() {
+        const out = !token;
+        $('sub-gate').classList.toggle('hidden', !out);
+        $('sub-title-form').classList.toggle('hidden', out || subMode !== 1);
+        $('sub-chap-form').classList.toggle('hidden', out || subMode !== 2);
+        $('sub-t1').classList.toggle('on', subMode === 1); $('sub-t2').classList.toggle('on', subMode === 2);
+        if (!out && subMode === 2) loadTitleOptions();
+    }
+    $('sub-t1').onclick = () => { subMode = 1; initSubmit(); };
+    $('sub-t2').onclick = () => { subMode = 2; initSubmit(); };
+    $('sub-login').onclick = () => $('auth-modal').classList.remove('hidden');
+
+    async function loadTitleOptions() {
+        const sel = $('sc-title'); sel.innerHTML = '';
+        const add = (label, items) => {
+            if (!items.length) return;
+            const g = document.createElement('optgroup'); g.label = label;
+            items.forEach(t => g.append(new Option(t.title + (t.status && t.status !== 'published' ? ' (на проверке)' : ''), t.id)));
+            sel.append(g);
+        };
+        try {
+            const [mine, lib] = await Promise.all([api({ action: 'my_titles' }), call({ action: 'lib_list', offset: 0 })]);
+            add('Мои произведения', mine.titles);
+            add('Библиотека', lib.entries.filter(x => !mine.titles.some(t => 'rd-' + t.id === x.url)).map(x => ({ id: x.url, title: x.title })));
+        } catch (e) { $('sc-msg').textContent = e.message; }
+        if (!sel.options.length) sel.add(new Option('Пока нет произведений', ''));
+    }
+
+    $('st-send').onclick = async () => {
+        const m = $('st-msg'), t = $('st-title').value.trim();
+        m.className = 'fmsg';
+        if (t.length < 2) { m.textContent = 'Введи название'; return; }
+        const fd = new FormData(); fd.append('title', t); fd.append('description', $('st-desc').value.trim());
+        const f = $('st-cover').files[0]; if (f) fd.append('cover', f);
+        $('st-send').disabled = true; m.textContent = 'Отправляю…';
+        try {
+            await postForm('lib_submit', fd);
+            m.className = 'fmsg ok'; m.textContent = 'Отправлено на проверку. Статус смотри в профиле.';
+            $('st-title').value = ''; $('st-desc').value = ''; $('st-cover').value = '';
+        } catch (e) { m.textContent = e.message; }
+        finally { $('st-send').disabled = false; }
+    };
+
+    // распаковка ZIP/CBZ выполняется в браузере (на бесплатном плане Cloudflare сервер этого не потянет)
+    let fflatePromise;
+    const loadFflate = () => fflatePromise || (fflatePromise = new Promise((res, rej) => {
+        const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js';
+        s.onload = () => res(window.fflate);
+        s.onerror = () => { fflatePromise = null; rej(new Error('Не удалось загрузить модуль распаковки. Загрузи картинки по отдельности.')); };
+        document.head.append(s);
+    }));
+    const IMG_RE = /\.(jpe?g|png|webp)$/i;
+    async function collectPages(files) {
+        const pages = [];
+        for (const f of files) {
+            if (/\.(zip|cbz)$/i.test(f.name)) {
+                const ff = await loadFflate();
+                const out = ff.unzipSync(new Uint8Array(await f.arrayBuffer()), {
+                    filter: e => IMG_RE.test(e.name) && !/(^|\/)(\.|__MACOSX)/.test(e.name) && e.originalSize <= 8 * 1048576 });
+                Object.keys(out).forEach(n => pages.push({ name: n, blob: new Blob([out[n]]) }));
+            } else if (IMG_RE.test(f.name)) pages.push({ name: f.name, blob: f });
+        }
+        pages.sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true }));
+        return pages;
+    }
+    async function uploadPage(id, n, blob) {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                const r = await fetch(WORKER_URL + '?' + new URLSearchParams({ action: 'chapter_page', id, n }),
+                    { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: blob });
+                const d = await r.json(); if (d.error) throw new Error(d.error); return;
+            } catch (e) {
+                if (attempt >= 1) throw new Error('Страница ' + n + ': ' + e.message);
+                await new Promise(r => setTimeout(r, 800));
+            }
+        }
+    }
+    $('sc-send').onclick = async () => {
+        const m = $('sc-msg'), btn = $('sc-send'), prog = $('sc-prog');
+        const tid = $('sc-title').value, num = $('sc-num').value.trim().replace(',', '.'), files = [...$('sc-files').files];
+        m.className = 'fmsg';
+        if (!tid) { m.textContent = 'Выбери произведение'; return; }
+        if (!num || isNaN(parseFloat(num))) { m.textContent = 'Введи номер главы'; return; }
+        if (!files.length) { m.textContent = 'Выбери файлы'; return; }
+        btn.disabled = true; prog.classList.remove('hidden'); prog.value = 0;
+        try {
+            m.textContent = 'Подготавливаю страницы…';
+            const pages = await collectPages(files);
+            if (!pages.length) throw new Error('Не нашёл ни одной картинки (JPG, PNG, WebP)');
+            if (pages.length > 200) throw new Error('Слишком много страниц: максимум 200');
+            const { id } = await post('chapter_start', { title_id: tid, number: num, name: $('sc-name').value.trim() });
+            for (let i = 0; i < pages.length; i++) {
+                m.textContent = 'Загружаю страницу ' + (i + 1) + ' из ' + pages.length + '…';
+                await uploadPage(id, i + 1, pages[i].blob);
+                prog.value = Math.round((i + 1) / pages.length * 100);
+            }
+            await post('chapter_finish', { id });
+            m.className = 'fmsg ok'; m.textContent = 'Готово: ' + pages.length + ' стр. отправлено на проверку.';
+            $('sc-files').value = ''; $('sc-num').value = ''; $('sc-name').value = '';
+        } catch (e) { m.textContent = e.message; }
+        finally { btn.disabled = false; prog.classList.add('hidden'); }
+    };
+
+    // профиль
+    async function renderProfile() {
+        const box = $('prof-body'); box.textContent = '';
+        if (!token) {
+            box.append(el('p', 'note', 'Войди, чтобы сохранять прогресс, предлагать произведения и главы.'));
+            const b = el('button', 'btn', 'Войти или зарегистрироваться'); b.onclick = () => $('auth-modal').classList.remove('hidden'); box.append(b);
+            return;
+        }
+        const head = el('div', 'pcard'); head.append(el('h3', '', user), el('p', 'note', ROLE_RU[(me && me.role) || 'user']));
+        const out = el('button', 'btn ghost', 'Выйти'); out.onclick = () => { if (confirm('Выйти из аккаунта? Прогресс останется на сервере.')) logout(); };
+        head.append(out); box.append(head, el('h4', 'sh', 'Мои заявки'));
+        const list = el('div', 'pcard', 'Загрузка…'); box.append(list);
+        try {
+            const d = await api({ action: 'my_subs' });
+            list.textContent = d.subs.length ? '' : 'Заявок пока нет';
+            d.subs.forEach(s => {
+                const r = el('div', 'srow'), t = el('div');
+                t.append(el('b', '', s.type === 'chapter' ? (s.title || 'Произведение') + ', глава ' + (s.chapter_number ?? '') : (s.title || 'Произведение')));
+                if (s.moderator_note) t.append(el('div', 'note', 'Комментарий модератора: ' + s.moderator_note));
+                r.append(t, el('span', 'st st-' + s.status, ST_RU[s.status] || s.status)); list.append(r);
+            });
+        } catch (e) { list.textContent = 'Ошибка: ' + e.message; }
+    }
+
+    // модерация
+    async function decide(id, decision, note) {
+        for (;;) { const d = await post('mod_decide', { id, decision, note }); if (!d.moving) return; }
+    }
+    function queueItem(q) {
+        const c = el('div', 'pcard'), chap = q.type === 'chapter';
+        c.append(el('h3', '', chap ? (q.title || 'Произведение') + ', глава ' + (q.chapter_number ?? '') : (q.title || 'Без названия')));
+        c.append(el('p', 'note', (chap ? 'Новая глава' + (q.page_count ? ' · ' + q.page_count + ' стр.' : '') : 'Новое произведение') + ' · автор: ' + (q.author || '—')));
+        if (!chap && q.description) c.append(el('p', '', q.description));
+        const pv = el('div', 'pv'); c.append(pv);
+        if (q.cover_url) blobUrl(q.cover_url).then(u => { const i = new Image(); i.src = u; i.className = 'pvc'; pv.append(i); }).catch(() => {});
+        if (chap) {
+            const b = el('button', 'btn ghost', 'Посмотреть страницы');
+            b.onclick = async () => {
+                b.disabled = true; b.textContent = 'Загружаю…';
+                try {
+                    const d = await api({ action: 'mod_pages', id: q.chapter_id });
+                    for (const p of d.pages) { const i = new Image(); i.src = await blobUrl(p.url); i.className = 'pvp'; pv.append(i); }
+                    b.remove();
+                } catch (e) { b.textContent = 'Ошибка: ' + e.message; b.disabled = false; }
+            };
+            c.append(b);
+        }
+        const row = el('div', 'arow'), msg = el('p', 'fmsg'), btns = [];
+        [['approve', 'Одобрить', ''], ['revision', 'На доработку', ' ghost'], ['reject', 'Отклонить', ' ghost']].forEach(([dec, label, cls]) => {
+            const b = el('button', 'btn' + cls, label); btns.push(b);
+            b.onclick = async () => {
+                let note = '';
+                if (dec !== 'approve') { note = prompt('Причина (необязательно):'); if (note === null) return; }
+                btns.forEach(x => { x.disabled = true; }); msg.textContent = 'Сохраняю…';
+                try { await decide(q.id, dec, note); c.remove(); }
+                catch (e) { msg.textContent = e.message; btns.forEach(x => { x.disabled = false; }); }
+            };
+            row.append(b);
+        });
+        c.append(row, msg);
+        return c;
+    }
+    async function loadQueue() {
+        const box = $('mod-list'); box.textContent = 'Загрузка…';
+        $('mod-admin').classList.toggle('hidden', !(me && me.role === 'admin'));
+        try {
+            const d = await api({ action: 'mod_queue' });
+            box.textContent = d.queue.length ? '' : 'Заявок на проверку нет';
+            d.queue.forEach(q => box.append(queueItem(q)));
+        } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
+    }
+    $('ma-send').onclick = async () => {
+        const m = $('ma-msg'); m.className = 'fmsg'; m.textContent = '…';
+        try { await post('setrole', { username: $('ma-user').value.trim(), role: $('ma-role').value }); m.className = 'fmsg ok'; m.textContent = 'Роль изменена'; }
+        catch (e) { m.textContent = e.message; }
+    };
 
     // ---------- Полный экран в настройках ----------
     if (!fsOK) $('fs-row').classList.add('hidden');
