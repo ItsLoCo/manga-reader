@@ -1,3 +1,4 @@
+
 :root { --bg:#000; --card:#151515; --line:#2a2a2a; --blue:#D71932; --blue-d:#a8112a; --txt:#F5F5F5; --mute:#8a8a8a; }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { width:100%; height:100%; background:var(--bg); color:var(--txt); overflow:hidden; touch-action:manipulation;
@@ -219,3 +220,23 @@ progress { width:100%; height:6px; margin-top:12px; accent-color:var(--blue); }
 .pvp { width:100%; border-radius:6px; }
 .arow { display:flex; gap:8px; }
 .arow .btn { margin-top:12px; padding:11px 6px; font-size:13px; }
+
+/* ---- Этап 4: отзывы, жалобы ---- */
+#report-modal { position:fixed; top:0; right:0; left:0; bottom:auto; height:var(--app-h, 100vh); background:rgba(0,0,0,.75); z-index:50; display:flex; justify-content:center; align-items:center; padding:20px; }
+.auth-box select, .auth-box textarea { width:100%; background:var(--card); border:1px solid var(--line); color:#fff; padding:13px; border-radius:10px; margin-bottom:10px; font-size:15px; font-family:inherit; outline:none; }
+#report-ch { width:100%; padding:14px; border-radius:12px; font-weight:600; font-size:15px; margin-top:10px; }
+#d-social { margin-top:26px; }
+#d-social textarea { width:100%; background:var(--card); color:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:15px; font-family:inherit; outline:none; }
+#d-social textarea:focus { border-color:var(--blue); }
+.rates { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+.rate { width:34px; height:34px; border-radius:50%; background:transparent; border:1px solid var(--line); color:var(--txt); font-size:13px; font-weight:600; }
+.rate.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+.ctop { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+.cbody { white-space:pre-wrap; word-break:break-word; }
+.crow { display:flex; gap:16px; margin-top:8px; }
+.link { background:none; border:none; padding:0; color:var(--mute); font-size:12px; text-decoration:underline; }
+.arow .btn.on { border-color:var(--blue) !important; color:var(--blue) !important; }
+
+.chk { display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.4; color:var(--txt); margin-top:16px; }
+.tab .chk input { width:20px; height:20px; padding:0; margin:1px 0 0; flex-shrink:0; accent-color:var(--blue); }
+#d-block { width:100%; padding:13px; border-radius:12px; font-size:14px; margin-top:10px; }
