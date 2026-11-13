@@ -33,10 +33,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const leaveFs = () => { if (inFs()) document.exitFullscreen().catch(() => {}); };
 
     // ---------- Экраны и история (свайп назад не выбрасывает с сайта) ----------
-    let view = 'home', lastPop = 0;
+    let view = 'home', lastPop = 0, homeY = 0;
     const standalone = navigator.standalone || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+    const docMode = () => !standalone && mode() !== 'paged-horizontal';
+    const S = () => docMode() ? (document.scrollingElement || document.documentElement) : reader;
+    function applyScrollMode() {
+        const c = document.documentElement.classList;
+        c.toggle('docscroll', !standalone); c.toggle('hz', mode() === 'paged-horizontal'); c.toggle('pv', mode() === 'paged-vertical');
+    }
     function ui(show) { navPanel.classList.toggle('nav-hidden', !show); readerTop.classList.toggle('nav-hidden', !show); }
     function setView(v) {
+        if (view === 'home' && v !== 'home') homeY = window.scrollY;
         const prev = view; view = v;
         startScreen.classList.toggle('hidden', v !== 'home');
         detail.classList.toggle('hidden', v !== 'detail');
@@ -46,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
             syncNow(); auto = false; toggle.checked = false; cancelAnimationFrame(raf); closeSettings(); ui(false); leaveFs();
         }
         document.documentElement.classList.toggle('reading', v === 'reader');
+        if (v === 'home') setTimeout(() => window.scrollTo(0, homeY), 0); else if (prev !== v) window.scrollTo(0, 0);
         if (v === 'home') { renderContinue(); renderLists(); }
         if (v === 'detail' && dm) renderDetailBtns();
     }
@@ -79,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ---------- Прогресс и синхронизация ----------
-    const curPos = () => mode() === 'paged-horizontal' ? reader.scrollLeft : reader.scrollTop;
+    const curPos = () => mode() === 'paged-horizontal' ? S().scrollLeft : S().scrollTop;
     function saveProgress(pos) {
         if (!manga || !chapters[curIdx]) return;
         history[manga.id] = { id: manga.id, title: manga.title, cover: manga.cover, ch: chapters[curIdx].id,
@@ -207,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-ru').className = 'd-ru'; $('d-ru').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
         renderDetailBtns();
         $('d-block').classList.toggle('hidden', !(me && ['moderator', 'admin'].includes(me.role)) || String(m.id).indexOf('rd-') === 0);
-        if (String(m.id).indexOf('rd-') === 0) loadSocial(m); else $('d-social').classList.add('hidden');
+        loadSocial(m);
         try {
             const d = await call({ action: 'info', id: m.id });
             if (dm !== m) return;
@@ -408,10 +416,10 @@ document.addEventListener('DOMContentLoaded', () => {
         restoreTimer = setInterval(() => {
             tries++;
             const h = mode() === 'paged-horizontal';
-            const max = h ? reader.scrollWidth - reader.clientWidth : reader.scrollHeight - reader.clientHeight;
+            const max = h ? S().scrollWidth - S().clientWidth : S().scrollHeight - S().clientHeight;
             if (pos <= max || tries > 25) {
                 clearInterval(restoreTimer);
-                if (h) reader.scrollLeft = pos; else reader.scrollTop = pos;
+                if (h) S().scrollLeft = pos; else S().scrollTop = pos;
                 setTimeout(() => { restoring = false; progress(); }, 250);
             }
         }, 150);
@@ -419,16 +427,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function progress() {
         const h = mode() === 'paged-horizontal';
-        const max = h ? reader.scrollWidth - reader.clientWidth : reader.scrollHeight - reader.clientHeight;
+        const max = h ? S().scrollWidth - S().clientWidth : S().scrollHeight - S().clientHeight;
         const pct = max > 0 ? Math.min(100, Math.round(curPos() / max * 100)) : 0;
         progressBar.style.width = pct + '%'; $('chapter-pct').textContent = pct + '%';
         if (chapters.length) $('manga-pct').textContent = Math.round((curIdx + 1) / chapters.length * 100) + '%';
         $('nav-prev').disabled = curIdx <= 0; $('nav-next').disabled = curIdx >= chapters.length - 1;
     }
-    reader.addEventListener('scroll', () => {
+    const onScroll = () => {
+        if (view !== 'reader') return;
         progress(); if (restoring) return;
         clearTimeout(st); st = setTimeout(() => saveProgress(), 400);
-    });
+    };
+    reader.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
 
     // Тап по экрану показывает/прячет плашку с названием и нижнюю панель
     reader.addEventListener('click', () => {
@@ -442,20 +453,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (restoring) return;
         const dx = sx - e.changedTouches[0].clientX, dy = sy - e.changedTouches[0].clientY, h = mode() === 'paged-horizontal';
         if (standalone && sx < 28 && dx < -70 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - lastPop > 700) { window.history.back(); return; }
-        const end = h ? reader.scrollLeft >= reader.scrollWidth - reader.clientWidth - 5 : reader.scrollTop >= reader.scrollHeight - reader.clientHeight - 5;
+        const end = h ? S().scrollLeft >= S().scrollWidth - S().clientWidth - 5 : S().scrollTop >= S().scrollHeight - S().clientHeight - 5;
         const swipe = h ? dx > 60 && Math.abs(dx) > Math.abs(dy) : dy > 60 && Math.abs(dy) > Math.abs(dx);
         if (end && swipe && curIdx < chapters.length - 1) openChapter(curIdx + 1);
     }, { passive: true });
 
     // ---------- Автоскролл ----------
     function startAutoscroll() {
-        cancelAnimationFrame(raf); fpos = reader.scrollTop;
+        cancelAnimationFrame(raf); fpos = S().scrollTop;
         const loop = () => {
             if (!auto || mode() === 'paged-horizontal') return;
-            if (touching) fpos = reader.scrollTop;
+            if (touching) fpos = S().scrollTop;
             else {
-                fpos += parseFloat($('autoscroll-speed').value) * 0.4; reader.scrollTop = fpos;
-                if (reader.scrollTop >= reader.scrollHeight - reader.clientHeight - 2) {
+                fpos += parseFloat($('autoscroll-speed').value) * 0.4; S().scrollTop = fpos;
+                if (S().scrollTop >= S().scrollHeight - S().clientHeight - 2) {
                     if (curIdx < chapters.length - 1) { openChapter(curIdx + 1); return; }
                     auto = false; toggle.checked = false; return;
                 }
@@ -483,13 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
     $('close-menu').onclick = closeSettings;
     $('nav-prev').onclick = () => openChapter(curIdx - 1);
     $('nav-next').onclick = () => openChapter(curIdx + 1);
-    $('nav-top').onclick = () => reader.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    $('nav-top').onclick = () => S().scrollTo({ top: 0, left: 0, behavior: 'smooth' });
     chapterSelect.onchange = () => openChapter(+chapterSelect.value);
     $('home-btn').onclick = () => { closeSettings(); window.history.go(-2); };
-    const setMode = v => { reader.className = 'mode-' + v; ls.set('rd_mode', v); };
+    const setMode = v => { reader.className = 'mode-' + v; ls.set('rd_mode', v); applyScrollMode(); };
     $('scroll-mode').onchange = e => {
         setMode(e.target.value); auto = false; toggle.checked = false; cancelAnimationFrame(raf);
-        reader.scrollTo(0, 0); setTimeout(progress, 50);
+        S().scrollTo(0, 0); setTimeout(progress, 50);
     };
     const setBg = v => { document.documentElement.style.setProperty('--page-bg', v); ls.set('rd_bg', v); };
     $('bg-color').onchange = e => setBg(e.target.value);
@@ -517,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
             $('tab-' + n).classList.toggle('hidden', n !== t);
             $('tb-' + n).classList.toggle('on', n === t);
         });
-        startScreen.scrollTop = 0;
+        startScreen.scrollTop = 0; window.scrollTo(0, 0);
         if (t === 'catalog') loadCatalog(true);
         if (t === 'submit') initSubmit();
         if (t === 'profile') renderProfile();
@@ -704,7 +715,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let note = '';
                 if (dec !== 'approve') { note = prompt('Причина (необязательно):'); if (note === null) return; }
                 btns.forEach(x => { x.disabled = true; }); msg.textContent = 'Сохраняю…';
-                try { await decide(q.id, dec, note); c.remove(); }
+                try { await decide(q.id, dec, note); c.remove(); refreshCounts(); }
                 catch (e) { msg.textContent = e.message; btns.forEach(x => { x.disabled = false; }); }
             };
             row.append(b);
@@ -712,15 +723,39 @@ document.addEventListener('DOMContentLoaded', () => {
         c.append(row, msg);
         return c;
     }
-    async function loadQueue() {
-        const box = $('mod-list'); box.textContent = 'Загрузка…';
-        $('mod-admin').classList.toggle('hidden', !(me && me.role === 'admin'));
+    async function refreshCounts() {
         try {
-            const d = await api({ action: 'mod_queue' });
-            box.textContent = d.queue.length ? '' : 'Заявок на проверку нет';
-            d.queue.forEach(q => box.append(queueItem(q)));
+            const d = await api({ action: 'mod_counts' });
+            $('mc-subs').textContent = d.subs; $('mc-reps').textContent = d.reports;
+            $('tb-mod').textContent = 'Модерация' + (d.subs + d.reports ? ' (' + (d.subs + d.reports) + ')' : '');
+        } catch {}
+    }
+    let mw = 'subs';
+    async function loadModWin() {
+        const box = $('mw-body'); box.textContent = 'Загрузка…';
+        try {
+            if (mw === 'subs') {
+                const d = await api({ action: 'mod_queue' });
+                box.textContent = d.queue.length ? '' : 'Предложений нет';
+                d.queue.forEach(q => box.append(queueItem(q)));
+            } else {
+                const d = await api({ action: 'mod_reports' });
+                box.textContent = d.reports.length ? '' : 'Жалоб нет';
+                d.reports.forEach(r => box.append(reportItem(r)));
+            }
         } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
-        loadReports(); loadBlocked();
+    }
+    function openModWin(kind) {
+        mw = kind; $('mod-win').classList.remove('hidden'); $('mod-win').scrollTop = 0;
+        $('mw-title').textContent = kind === 'subs' ? 'Предложения' : 'Жалобы';
+        loadModWin();
+    }
+    $('mod-b-subs').onclick = () => openModWin('subs');
+    $('mod-b-reps').onclick = () => openModWin('reps');
+    $('mw-back').onclick = () => { $('mod-win').classList.add('hidden'); refreshCounts(); };
+    async function loadQueue() {
+        $('mod-admin').classList.toggle('hidden', !(me && me.role === 'admin'));
+        refreshCounts(); loadBlocked();
     }
     function reportItem(r) {
         const c = el('div', 'pcard');
@@ -732,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
             b.onclick = async () => {
                 if (dec === 'hide' && !confirm('Скрыть этот контент для всех пользователей?')) return;
                 btns.forEach(x => { x.disabled = true; });
-                try { await post('mod_report_decide', { id: r.id, decision: dec }); c.remove(); }
+                try { await post('mod_report_decide', { id: r.id, decision: dec }); c.remove(); refreshCounts(); }
                 catch (e) { msg.textContent = e.message; btns.forEach(x => { x.disabled = false; }); }
             };
             row.append(b);
@@ -784,16 +819,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------- Оценки, избранное, комментарии, жалобы (произведения Reader) ----------
     const needLogin = () => { $('auth-modal').classList.remove('hidden'); };
     let rpTarget = null;
-    function openReport(type, id) {
+    function openReport(type, id, name) {
         if (!token) { needLogin(); return; }
-        rpTarget = { type, id }; $('rp-msg').textContent = ''; $('rp-text').value = '';
+        rpTarget = { type, id, name }; $('rp-msg').textContent = ''; $('rp-text').value = '';
         $('report-modal').classList.remove('hidden');
     }
     $('rp-close').onclick = () => $('report-modal').classList.add('hidden');
     $('rp-send').onclick = async () => {
         const m = $('rp-msg'), extra = $('rp-text').value.trim(); m.className = 'fmsg'; m.textContent = '…';
         try {
-            await post('report', { target_type: rpTarget.type, target_id: rpTarget.id, reason: $('rp-cat').value + (extra ? ': ' + extra : '') });
+            await post('report', { target_type: rpTarget.type, target_id: rpTarget.id, title: rpTarget.name || '', reason: $('rp-cat').value + (extra ? ': ' + extra : '') });
             m.className = 'fmsg ok'; m.textContent = 'Жалоба отправлена модераторам.';
             setTimeout(() => $('report-modal').classList.add('hidden'), 1200);
         } catch (e) { m.textContent = e.message; }
@@ -814,13 +849,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const nums = el('div', 'rates');
         for (let i = 1; i <= 10; i++) {
             const b = el('button', 'rate' + (s.mine === i ? ' on' : ''), String(i));
-            b.onclick = act(() => post('rating_set', { id: m.id, score: i })); nums.append(b);
+            b.onclick = act(() => post('rating_set', { id: m.id, score: i, title: m.title })); nums.append(b);
         }
         const row = el('div', 'arow');
         const fav = el('button', 'btn ghost' + (s.fav ? ' on' : ''), (s.fav ? '♥ В избранном' : '♡ В избранное') + ' · ' + s.favs);
         fav.onclick = act(() => post('fav_set', { id: m.id, on: !s.fav }));
-        const rep = el('button', 'btn ghost', 'Пожаловаться'); rep.onclick = () => openReport('title', m.id);
-        row.append(fav, rep); rate.append(nums, row); box.append(rate);
+        const rep = el('button', 'btn ghost', 'Пожаловаться'); rep.onclick = () => openReport('title', m.id, m.title);
+        if (String(m.id).indexOf('rd-') === 0) row.append(fav);
+        row.append(rep); rate.append(nums, row); box.append(rate);
 
         box.append(el('h4', 'sh', 'Комментарии (' + s.comments + ')'));
         const form = el('div', 'pcard'), ta = el('textarea');
@@ -829,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
         send.onclick = async () => {
             if (!token) { needLogin(); return; }
             const t = ta.value.trim(); if (!t) return; send.disabled = true;
-            try { await post('comment_add', { id: m.id, body: t }); loadSocial(m); } catch (e) { alert(e.message); send.disabled = false; }
+            try { await post('comment_add', { id: m.id, body: t, title: m.title }); loadSocial(m); } catch (e) { alert(e.message); send.disabled = false; }
         };
         form.append(ta, send); box.append(form);
         const list = el('div'); box.append(list);
