@@ -17,7 +17,7 @@
 
     <div id="start-screen">
         <header class="top">
-            <div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
+            <div><h1 class="logo" id="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
             <button id="auth-btn" class="pill">Войти</button>
         </header>
         <nav id="tabs" class="tabs">
@@ -107,6 +107,8 @@
                 <select id="ma-role"><option value="user">Читатель</option><option value="moderator">Модератор</option><option value="admin">Администратор</option></select>
                 <p id="ma-msg" class="fmsg"></p>
                 <button id="ma-send" class="btn">Назначить роль</button>
+                <button id="ma-diag" class="btn ghost">Показать схему базы</button>
+                <pre id="ma-pre" class="hidden"></pre>
             </div>
         </div>
         <footer class="by">by LoCo</footer>
@@ -176,6 +178,12 @@
             <label for="autoscroll-speed">Скорость:</label>
             <input type="range" id="autoscroll-speed" min="1" max="10" value="3">
         </div>
+        <div class="setting-item">
+            <label for="h-adj">Подгонка высоты:</label>
+            <input type="range" id="h-adj" min="0" max="120" step="4" value="0">
+        </div>
+        <p class="fs-hint">Если при чтении снизу осталась чёрная полоса, сдвигай ползунок вправо, пока она не исчезнет.</p>
+        <p class="fs-hint" id="diag"></p>
         <div class="setting-item" id="fs-row">
             <label for="fs-toggle">Полный экран:</label>
             <input type="checkbox" id="fs-toggle">
