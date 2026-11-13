@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Reader">
     <link rel="apple-touch-icon" href="icon-180.png">
     <meta name="theme-color" content="#000000">
@@ -89,10 +89,10 @@
         <div id="tab-profile" class="tab hidden"><div id="prof-body"></div></div>
 
         <div id="tab-mod" class="tab hidden">
-            <h4 class="sh">Заявки на проверку</h4>
-            <div id="mod-list"></div>
-            <h4 class="sh">Жалобы</h4>
-            <div id="mod-reports"></div>
+            <div class="modbtns">
+                <button id="mod-b-subs" class="modbtn"><span>Предложения</span><b id="mc-subs">0</b></button>
+                <button id="mod-b-reps" class="modbtn"><span>Жалобы</span><b id="mc-reps">0</b></button>
+            </div>
             <div id="mod-block" class="pcard">
                 <h3>Скрытые произведения MangaDex</h3>
                 <p class="note">Если на сайт попал тайтл, который нарушает правила, вставь ссылку на него или его id: он пропадёт из поиска и каталога.</p>
@@ -199,6 +199,11 @@
         <div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
         <div id="fs-body"></div>
         <div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
+    </div>
+
+    <div id="mod-win" class="hidden">
+        <div class="mw-head"><button id="mw-back" class="pill">← Назад</button><h3 id="mw-title"></h3></div>
+        <div id="mw-body"></div>
     </div>
 
     <div id="report-modal" class="hidden">
