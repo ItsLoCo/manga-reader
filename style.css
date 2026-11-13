@@ -1,4 +1,3 @@
-
 :root { --bg:#000; --card:#151515; --line:#2a2a2a; --blue:#D71932; --blue-d:#a8112a; --txt:#F5F5F5; --mute:#8a8a8a; }
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { width:100%; height:100%; background:var(--bg); color:var(--txt); overflow:hidden; touch-action:manipulation;
@@ -240,3 +239,9 @@ progress { width:100%; height:6px; margin-top:12px; accent-color:var(--blue); }
 .chk { display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.4; color:var(--txt); margin-top:16px; }
 .tab .chk input { width:20px; height:20px; padding:0; margin:1px 0 0; flex-shrink:0; accent-color:var(--blue); }
 #d-block { width:100%; padding:13px; border-radius:12px; font-size:14px; margin-top:10px; }
+
+#diag { word-break:break-all; font-size:10px; opacity:.6; }
+#h-adj { flex:.6; accent-color:var(--blue); }
+
+#ma-pre { white-space:pre-wrap; word-break:break-all; font-size:11px; color:var(--mute); margin-top:12px; }
+#dbg { position:fixed; left:8px; right:8px; top:8px; z-index:9999; background:rgba(0,0,0,.88); color:#9f9; border:1px solid #333; border-radius:10px; padding:10px; font:11px/1.4 monospace; white-space:pre-wrap; }
