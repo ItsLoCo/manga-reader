@@ -1,195 +1,227 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Reader">
-<link rel="apple-touch-icon" href="icon-180.png">
-<meta name="theme-color" content="#000000">
-<title>Reader</title>
-<link rel="stylesheet" href="style.css">
-<link rel="manifest" href="manifest.json">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Reader">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="theme-color" content="#000000">
+    <title>Reader</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
-<div id="progress-bar-container"><div id="progress-bar"></div></div>
+    <div id="progress-bar-container"><div id="progress-bar"></div></div>
 
-<div id="start-screen">
-<header class="top">
-<div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
-<button id="auth-btn" class="pill">Войти</button>
-</header>
-<nav id="tabs" class="tabs">
-<button class="tabbtn on" id="tb-home" data-tab="home">Главная</button>
-<button class="tabbtn" id="tb-catalog" data-tab="catalog">Каталог</button>
-<button class="tabbtn" id="tb-submit" data-tab="submit">Предложить</button>
-<button class="tabbtn" id="tb-profile" data-tab="profile">Профиль</button>
-<button class="tabbtn hidden" id="tb-mod" data-tab="mod">Модерация</button>
-</nav>
-<div id="tab-home">
-<div class="main-search-box">
-<input type="text" id="search-input" placeholder="Название манги или манхвы...">
-<button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
-<button id="search-btn">Найти</button>
-</div>
-<div id="results" class="hidden">
-<div class="rh"><span id="rcount"></span><button id="rclose" class="pill">Закрыть</button></div>
-<div id="grid" class="grid"></div>
-<button id="more" class="pill more hidden">Показать ещё</button>
-</div>
-<div id="home"></div>
-</div>
+    <div id="start-screen">
+        <header class="top">
+            <div><h1 class="logo">Reader</h1><div class="by by-top">by LoCo</div></div>
+            <button id="auth-btn" class="pill">Войти</button>
+        </header>
+        <nav id="tabs" class="tabs">
+            <button class="tabbtn on" id="tb-home" data-tab="home">Главная</button>
+            <button class="tabbtn" id="tb-catalog" data-tab="catalog">Каталог</button>
+            <button class="tabbtn" id="tb-submit" data-tab="submit">Предложить</button>
+            <button class="tabbtn" id="tb-profile" data-tab="profile">Профиль</button>
+            <button class="tabbtn hidden" id="tb-mod" data-tab="mod">Модерация</button>
+        </nav>
+        <div id="tab-home">
+        <div class="main-search-box">
+            <input type="text" id="search-input" placeholder="Название манги или манхвы...">
+            <button id="filter-btn" aria-label="Фильтры"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><i id="f-badge" class="hidden">0</i></button>
+            <button id="search-btn">Найти</button>
+        </div>
+        <div id="results" class="hidden">
+            <div class="rh"><span id="rcount"></span><button id="rclose" class="pill">Закрыть</button></div>
+            <div id="grid" class="grid"></div>
+            <button id="more" class="pill more hidden">Показать ещё</button>
+        </div>
+        <div id="home"></div>
+        </div>
 
-<div id="tab-catalog" class="tab hidden">
-<div class="main-search-box">
-<input type="text" id="cat-q" placeholder="Поиск по библиотеке Reader...">
-<button id="cat-btn">Найти</button>
-</div>
-<p class="note">Произведения, которые добавили читатели Reader.</p>
-<div id="cat-grid" class="grid"></div>
-<button id="cat-more" class="pill more hidden">Показать ещё</button>
-</div>
+        <div id="tab-catalog" class="tab hidden">
+            <div class="main-search-box">
+                <input type="text" id="cat-q" placeholder="Поиск по библиотеке Reader...">
+                <button id="cat-btn">Найти</button>
+            </div>
+            <p class="note">Произведения, которые добавили читатели Reader.</p>
+            <div id="cat-grid" class="grid"></div>
+            <button id="cat-more" class="pill more hidden">Показать ещё</button>
+        </div>
 
-<div id="tab-submit" class="tab hidden">
-<div class="seg"><button id="sub-t1" class="on">Новое произведение</button><button id="sub-t2">Новая глава</button></div>
-<div id="sub-gate" class="pcard hidden">
-<p>Чтобы предлагать произведения и главы, войди в аккаунт.</p>
-<button id="sub-login" class="btn">Войти</button>
-</div>
-<div id="sub-title-form">
-<label for="st-title">Название</label>
-<input id="st-title" maxlength="120" placeholder="Название произведения">
-<label for="st-desc">Описание</label>
-<textarea id="st-desc" maxlength="2000" rows="5" placeholder="О чём это произведение"></textarea>
-<label for="st-cover">Обложка (JPG, PNG, WebP до 3 МБ)</label>
-<input type="file" id="st-cover" accept="image/jpeg,image/png,image/webp">
-<p id="st-msg" class="fmsg"></p>
-<button id="st-send" class="btn">Отправить на проверку</button>
-<p class="note">Все произведения проходят проверку модератором. Загружай только то, что имеешь право распространять.</p>
-</div>
-<div id="sub-chap-form" class="hidden">
-<label for="sc-title">Произведение</label>
-<select id="sc-title"></select>
-<label for="sc-num">Номер главы</label>
-<input id="sc-num" inputmode="decimal" placeholder="Например, 12 или 12.5">
-<label for="sc-name">Название главы (необязательно)</label>
-<input id="sc-name" maxlength="120">
-<label for="sc-files">Файлы: ZIP, CBZ или картинки</label>
-<input type="file" id="sc-files" multiple accept=".zip,.cbz,image/jpeg,image/png,image/webp">
-<progress id="sc-prog" class="hidden" max="100" value="0"></progress>
-<p id="sc-msg" class="fmsg"></p>
-<button id="sc-send" class="btn">Загрузить главу</button>
-<p class="note">До 200 страниц, каждая до 8 МБ. Глава появится после проверки модератором.</p>
-</div>
-</div>
+        <div id="tab-submit" class="tab hidden">
+            <div class="seg"><button id="sub-t1" class="on">Новое произведение</button><button id="sub-t2">Новая глава</button></div>
+            <div id="sub-gate" class="pcard hidden">
+                <p>Чтобы предлагать произведения и главы, войди в аккаунт.</p>
+                <button id="sub-login" class="btn">Войти</button>
+            </div>
+            <div id="sub-title-form">
+                <label for="st-title">Название</label>
+                <input id="st-title" maxlength="120" placeholder="Название произведения">
+                <label for="st-desc">Описание</label>
+                <textarea id="st-desc" maxlength="2000" rows="5" placeholder="О чём это произведение"></textarea>
+                <label for="st-cover">Обложка (JPG, PNG, WebP до 3 МБ)</label>
+                <input type="file" id="st-cover" accept="image/jpeg,image/png,image/webp">
+                <label class="chk"><input type="checkbox" id="st-rules"><span>Подтверждаю: в произведении нет контента 18+ и ЛГБТ-тематики, и у меня есть право его публиковать</span></label>
+                <p id="st-msg" class="fmsg"></p>
+                <button id="st-send" class="btn">Отправить на проверку</button>
+                <p class="note">Все произведения проходят проверку модератором. Запрещены: контент 18+, ЛГБТ-тематика и всё, что ты не имеешь права распространять. Такие заявки отклоняются.</p>
+            </div>
+            <div id="sub-chap-form" class="hidden">
+                <label for="sc-title">Произведение</label>
+                <select id="sc-title"></select>
+                <label for="sc-num">Номер главы</label>
+                <input id="sc-num" inputmode="decimal" placeholder="Например, 12 или 12.5">
+                <label for="sc-name">Название главы (необязательно)</label>
+                <input id="sc-name" maxlength="120">
+                <label for="sc-files">Файлы: ZIP, CBZ или картинки</label>
+                <input type="file" id="sc-files" multiple accept=".zip,.cbz,image/jpeg,image/png,image/webp">
+                <progress id="sc-prog" class="hidden" max="100" value="0"></progress>
+                <label class="chk"><input type="checkbox" id="sc-rules"><span>Подтверждаю: в главе нет контента 18+ и ЛГБТ-тематики, и у меня есть право её публиковать</span></label>
+                <p id="sc-msg" class="fmsg"></p>
+                <button id="sc-send" class="btn">Загрузить главу</button>
+                <p class="note">До 200 страниц, каждая до 8 МБ. Глава появится после проверки модератором. Контент 18+ и ЛГБТ-тематика запрещены.</p>
+            </div>
+        </div>
 
-<div id="tab-profile" class="tab hidden"><div id="prof-body"></div></div>
+        <div id="tab-profile" class="tab hidden"><div id="prof-body"></div></div>
 
-<div id="tab-mod" class="tab hidden">
-<h4 class="sh">Заявки на проверку</h4>
-<div id="mod-list"></div>
-<div id="mod-admin" class="pcard hidden">
-<h3>Роли пользователей</h3>
-<input id="ma-user" placeholder="Логин пользователя" autocapitalize="none">
-<select id="ma-role"><option value="user">Читатель</option><option value="moderator">Модератор</option><option value="admin">Администратор</option></select>
-<p id="ma-msg" class="fmsg"></p>
-<button id="ma-send" class="btn">Назначить роль</button>
-</div>
-</div>
-<footer class="by">by LoCo</footer>
-</div>
+        <div id="tab-mod" class="tab hidden">
+            <h4 class="sh">Заявки на проверку</h4>
+            <div id="mod-list"></div>
+            <h4 class="sh">Жалобы</h4>
+            <div id="mod-reports"></div>
+            <div id="mod-block" class="pcard">
+                <h3>Скрытые произведения MangaDex</h3>
+                <p class="note">Если на сайт попал тайтл, который нарушает правила, вставь ссылку на него или его id: он пропадёт из поиска и каталога.</p>
+                <input id="mb-id" placeholder="Ссылка или id произведения MangaDex">
+                <p id="mb-msg" class="fmsg"></p>
+                <button id="mb-add" class="btn">Скрыть на сайте</button>
+                <div id="mb-list"></div>
+            </div>
+            <div id="mod-admin" class="pcard hidden">
+                <h3>Роли пользователей</h3>
+                <input id="ma-user" placeholder="Логин пользователя" autocapitalize="none">
+                <select id="ma-role"><option value="user">Читатель</option><option value="moderator">Модератор</option><option value="admin">Администратор</option></select>
+                <p id="ma-msg" class="fmsg"></p>
+                <button id="ma-send" class="btn">Назначить роль</button>
+            </div>
+        </div>
+        <footer class="by">by LoCo</footer>
+    </div>
 
-<div id="detail-screen" class="hidden">
-<button id="d-back" class="pill">← Назад</button>
-<div class="d-head">
-<img id="d-cover" alt="">
-<div><h2 id="d-title"></h2><p id="d-meta"></p><p id="d-ru" class="d-ru"></p><div id="d-tags"></div></div>
-</div>
-<p id="d-desc"></p>
-<button id="d-read">Читать</button>
-<div class="d-btns">
-<button id="d-plan" class="ghost">Хочу прочитать</button>
-<button id="d-done" class="ghost">Прочитано</button>
-</div>
-</div>
+    <div id="detail-screen" class="hidden">
+        <button id="d-back" class="pill">← Назад</button>
+        <div class="d-head">
+            <img id="d-cover" alt="">
+            <div><h2 id="d-title"></h2><p id="d-meta"></p><p id="d-ru" class="d-ru"></p><div id="d-tags"></div></div>
+        </div>
+        <p id="d-desc"></p>
+        <button id="d-read">Читать</button>
+        <div class="d-btns">
+            <button id="d-plan" class="ghost">Хочу прочитать</button>
+            <button id="d-done" class="ghost">Прочитано</button>
+        </div>
+        <button id="d-block" class="ghost hidden">Скрыть это произведение на сайте (модератор)</button>
+        <div id="d-social" class="hidden"></div>
+    </div>
 
-<div id="reader-screen" class="hidden">
-<div id="reader-top" class="nav-hidden" role="button" aria-label="Страница тайтла">
-<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-<div class="rt-text"><div id="rt-title"></div><div id="rt-chap"></div></div>
-</div>
-<div id="reader" class="mode-webtoon"></div>
-<div id="reader-navigation" class="nav-hidden">
-<button id="nav-prev" class="nav-btn-mini" aria-label="Предыдущая глава"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-<button id="nav-top" class="nav-btn-mini" aria-label="В начало главы"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-<button id="nav-settings" class="nav-btn-mini style-gear" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
-<button id="nav-next" class="nav-btn-mini" aria-label="Следующая глава"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
-</div>
-</div>
+    <div id="reader-screen" class="hidden">
+        <div id="reader-top" class="nav-hidden" role="button" aria-label="Страница тайтла">
+            <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+            <div class="rt-text"><div id="rt-title"></div><div id="rt-chap"></div></div>
+        </div>
+        <div id="reader" class="mode-webtoon"></div>
+        <div id="reader-navigation" class="nav-hidden">
+            <button id="nav-prev" class="nav-btn-mini" aria-label="Предыдущая глава"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button id="nav-top" class="nav-btn-mini" aria-label="В начало главы"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            <button id="nav-settings" class="nav-btn-mini style-gear" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+            <button id="nav-next" class="nav-btn-mini" aria-label="Следующая глава"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+    </div>
 
-<div id="settings-menu">
-<h3>Настройки чтения</h3>
-<div class="stats-box">
-<div>Глава: <span id="chapter-pct">0%</span></div>
-<div>Манга: <span id="manga-pct">0%</span></div>
-</div>
-<div class="setting-item">
-<label>Режим прокрутки:</label>
-<select id="scroll-mode">
-<option value="webtoon">Вертикальная лента</option>
-<option value="paged-vertical">Постранично (вертикально)</option>
-<option value="paged-horizontal">Постранично (горизонтально)</option>
-</select>
-</div>
-<div class="setting-item">
-<label>Глава:</label>
-<select id="chapter-select"></select>
-</div>
-<div class="setting-item">
-<label>Цвет фона:</label>
-<select id="bg-color">
-<option value="#000000">Чёрный</option>
-<option value="#151515">Тёмно-синий</option>
-<option value="#ffffff">Белый</option>
-</select>
-</div>
-<div class="setting-item border-top">
-<label for="autoscroll-toggle">Автоскролл:</label>
-<input type="checkbox" id="autoscroll-toggle">
-</div>
-<div class="setting-item">
-<label for="autoscroll-speed">Скорость:</label>
-<input type="range" id="autoscroll-speed" min="1" max="10" value="3">
-</div>
-<div class="setting-item" id="fs-row">
-<label for="fs-toggle">Полный экран:</label>
-<input type="checkbox" id="fs-toggle">
-</div>
-<p class="fs-hint" id="fs-hint"></p>
-<button id="close-menu">Вернуться к чтению</button>
-<button id="home-btn" class="ghost">На главную</button>
-</div>
+    <div id="settings-menu">
+        <h3>Настройки чтения</h3>
+        <div class="stats-box">
+            <div>Глава: <span id="chapter-pct">0%</span></div>
+            <div>Манга: <span id="manga-pct">0%</span></div>
+        </div>
+        <div class="setting-item">
+            <label>Режим прокрутки:</label>
+            <select id="scroll-mode">
+                <option value="webtoon">Вертикальная лента</option>
+                <option value="paged-vertical">Постранично (вертикально)</option>
+                <option value="paged-horizontal">Постранично (горизонтально)</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <label>Глава:</label>
+            <select id="chapter-select"></select>
+        </div>
+        <div class="setting-item">
+            <label>Цвет фона:</label>
+            <select id="bg-color">
+                <option value="#000000">Чёрный</option>
+                <option value="#151515">Тёмно-синий</option>
+                <option value="#ffffff">Белый</option>
+            </select>
+        </div>
+        <div class="setting-item border-top">
+            <label for="autoscroll-toggle">Автоскролл:</label>
+            <input type="checkbox" id="autoscroll-toggle">
+        </div>
+        <div class="setting-item">
+            <label for="autoscroll-speed">Скорость:</label>
+            <input type="range" id="autoscroll-speed" min="1" max="10" value="3">
+        </div>
+        <div class="setting-item" id="fs-row">
+            <label for="fs-toggle">Полный экран:</label>
+            <input type="checkbox" id="fs-toggle">
+        </div>
+        <p class="fs-hint" id="fs-hint"></p>
+        <button id="close-menu">Вернуться к чтению</button>
+        <button id="report-ch" class="ghost hidden">Пожаловаться на главу</button>
+        <button id="home-btn" class="ghost">На главную</button>
+    </div>
 
-<div id="sheet-bg" class="hidden"></div>
-<div id="filter-sheet">
-<div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
-<div id="fs-body"></div>
-<div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
-</div>
+    <div id="sheet-bg" class="hidden"></div>
+    <div id="filter-sheet">
+        <div class="fs-head"><h3>Фильтры</h3><button id="f-reset" class="pill">Сбросить</button></div>
+        <div id="fs-body"></div>
+        <div class="fs-foot"><button id="f-apply">Показать результаты</button></div>
+    </div>
 
-<div id="auth-modal" class="hidden">
-<div class="auth-box">
-<h3>Аккаунт</h3>
-<input id="auth-user" placeholder="Логин" autocomplete="username" autocapitalize="none">
-<input id="auth-pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password">
-<p id="auth-msg"></p>
-<button id="auth-login">Войти</button>
-<button id="auth-register" class="ghost">Создать аккаунт</button>
-<button id="auth-close" class="ghost">Закрыть</button>
-</div>
-</div>
+    <div id="report-modal" class="hidden">
+        <div class="auth-box">
+            <h3>Пожаловаться</h3>
+            <select id="rp-cat">
+                <option>Нарушение авторских прав</option>
+                <option>Контент 18+ или ЛГБТ-тематика</option>
+                <option>Неприемлемый контент</option>
+                <option>Спам</option>
+                <option>Другое</option>
+            </select>
+            <textarea id="rp-text" rows="3" maxlength="400" placeholder="Подробности (необязательно)"></textarea>
+            <p id="rp-msg" class="fmsg"></p>
+            <button id="rp-send">Отправить</button>
+            <button id="rp-close" class="ghost">Закрыть</button>
+        </div>
+    </div>
 
-<script src="app.js"></script>
+    <div id="auth-modal" class="hidden">
+        <div class="auth-box">
+            <h3>Аккаунт</h3>
+            <input id="auth-user" placeholder="Логин" autocomplete="username" autocapitalize="none">
+            <input id="auth-pass" type="password" placeholder="Пароль (от 6 символов)" autocomplete="current-password">
+            <p id="auth-msg"></p>
+            <button id="auth-login">Войти</button>
+            <button id="auth-register" class="ghost">Создать аккаунт</button>
+            <button id="auth-close" class="ghost">Закрыть</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
