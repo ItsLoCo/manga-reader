@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
     const WORKER_URL = 'https://api.locomanga.pro/';
@@ -12,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // iPhone в режиме «На экран Домой»: браузер может сообщать высоту на высоту статус-бара меньше реальной
         const app = navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
         if (app && window.innerHeight >= window.innerWidth && window.screen && screen.height > h && screen.height - h < 140) h = screen.height;
-        document.documentElement.style.setProperty('--app-h', h + 'px');
+        let adj = 0; try { adj = parseInt(localStorage.getItem('rd_hadj')) || 0; } catch {}
+        document.documentElement.style.setProperty('--app-h', (h + adj) + 'px');
     };
     setH(); window.addEventListener('resize', setH);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', setH);
@@ -467,7 +467,17 @@ document.addEventListener('DOMContentLoaded', () => {
     toggle.onchange = () => { auto = toggle.checked; if (auto) startAutoscroll(); else cancelAnimationFrame(raf); };
 
     // ---------- Меню и настройки ----------
-    function openSettings() { settingsMenu.classList.add('open'); ui(false); }
+    function diagText() {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;top:0;left:0;visibility:hidden;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0';
+        document.body.append(probe);
+        const cs = getComputedStyle(probe), st = cs.paddingTop, sb = cs.paddingBottom; probe.remove();
+        const vv = window.visualViewport;
+        return 'inner ' + innerWidth + 'x' + innerHeight + '; visual ' + (vv ? Math.round(vv.height) : '-') + '; screen ' + screen.width + 'x' + screen.height +
+            '; safe top ' + st + ' bottom ' + sb + '; app-h ' + getComputedStyle(document.documentElement).getPropertyValue('--app-h') +
+            '; standalone ' + standalone + '; ' + navigator.userAgent;
+    }
+    function openSettings() { settingsMenu.classList.add('open'); ui(false); try { $('diag').textContent = diagText(); } catch {} }
     function closeSettings() { settingsMenu.classList.remove('open'); }
     $('nav-settings').onclick = e => { e.stopPropagation(); openSettings(); };
     $('close-menu').onclick = closeSettings;
@@ -760,6 +770,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try { await post('block_title', { id: $('mb-id').value.trim(), title: '' }); m.className = 'fmsg ok'; m.textContent = 'Скрыто'; $('mb-id').value = ''; loadBlocked(); }
         catch (e) { m.textContent = e.message; }
     };
+    $('ma-diag').onclick = async () => {
+        const pre = $('ma-pre'); pre.classList.remove('hidden'); pre.textContent = '…';
+        try { const d = await api({ action: 'status' }); pre.textContent = JSON.stringify(d.schema || d, null, 1); }
+        catch (e) { pre.textContent = e.message; }
+    };
     $('ma-send').onclick = async () => {
         const m = $('ma-msg'); m.className = 'fmsg'; m.textContent = '…';
         try { await post('setrole', { username: $('ma-user').value.trim(), role: $('ma-role').value }); m.className = 'fmsg ok'; m.textContent = 'Роль изменена'; }
@@ -836,11 +851,41 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { list.append(el('p', 'note', 'Ошибка: ' + e.message)); }
     }
 
+    // подгонка высоты экрана
+    try { $('h-adj').value = parseInt(localStorage.getItem('rd_hadj')) || 0; } catch {}
+    $('h-adj').oninput = e => { try { localStorage.setItem('rd_hadj', e.target.value); } catch {} setH(); try { $('diag').textContent = diagText(); } catch {} };
+
     // ---------- Полный экран в настройках ----------
     if (!fsOK) $('fs-row').classList.add('hidden');
     $('fs-toggle').checked = ls.get('rd_fs', true);
     $('fs-toggle').onchange = e => { ls.set('rd_fs', e.target.checked); if (e.target.checked) enterFs(); else leaveFs(); };
     if (isIOS && !standalone) $('fs-hint').textContent = 'Для полного экрана на iPhone: «Поделиться» → «На экран «Домой»», затем открывай читалку с иконки.';
+
+    // ---------- Диагностика экрана: 5 быстрых нажатий на логотип ----------
+    (function () {
+        let taps = 0, last = 0, box = null, timer = 0;
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)';
+        document.body.append(probe);
+        const text = () => {
+            const cs = getComputedStyle(probe), vv = window.visualViewport, r = el => { const b = el.getBoundingClientRect(); return Math.round(b.top) + '..' + Math.round(b.bottom); };
+            return ['innerHeight: ' + innerHeight + '  innerWidth: ' + innerWidth,
+                'visualViewport: ' + (vv ? Math.round(vv.height) + ' (top ' + Math.round(vv.offsetTop) + ')' : 'нет'),
+                'screen: ' + screen.width + 'x' + screen.height + '  dpr ' + devicePixelRatio,
+                'clientHeight html: ' + document.documentElement.clientHeight,
+                'safe top/bottom: ' + cs.paddingTop + ' / ' + cs.paddingBottom,
+                '--app-h: ' + getComputedStyle(document.documentElement).getPropertyValue('--app-h'),
+                'standalone: ' + navigator.standalone + ' / mq ' + matchMedia('(display-mode: standalone)').matches + ' / fs ' + matchMedia('(display-mode: fullscreen)').matches,
+                'view: ' + view + '  start ' + r(startScreen) + '  reader ' + r(readerScreen),
+                navigator.userAgent].join('\n');
+        };
+        const show = () => {
+            if (box) { box.remove(); box = null; clearInterval(timer); return; }
+            box = document.createElement('div'); box.id = 'dbg'; document.body.append(box);
+            box.onclick = show; const upd = () => { box.textContent = text() + '\n\n(нажми, чтобы закрыть)'; }; upd(); timer = setInterval(upd, 1000);
+        };
+        $('logo').onclick = () => { const n = Date.now(); taps = n - last < 700 ? taps + 1 : 1; last = n; if (taps >= 5) { taps = 0; show(); } };
+    })();
 
     // ---------- Запуск ----------
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
