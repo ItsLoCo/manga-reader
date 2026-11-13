@@ -1,3 +1,4 @@
+
 document.addEventListener('DOMContentLoaded', () => {
     const $ = id => document.getElementById(id);
     const WORKER_URL = 'https://api.locomanga.pro/';
@@ -205,6 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
         $('d-title').textContent = m.title; setCover($('d-cover'), m.cover);
         $('d-meta').textContent = ''; $('d-tags').textContent = ''; $('d-ru').className = 'd-ru'; $('d-ru').textContent = ''; $('d-desc').textContent = 'Загрузка описания…';
         renderDetailBtns();
+        $('d-block').classList.toggle('hidden', !(me && ['moderator', 'admin'].includes(me.role)) || String(m.id).indexOf('rd-') === 0);
+        if (String(m.id).indexOf('rd-') === 0) loadSocial(m); else $('d-social').classList.add('hidden');
         try {
             const d = await call({ action: 'info', id: m.id });
             if (dm !== m) return;
@@ -229,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         order: [['rel', 'Релевантность'], ['pop', 'Популярность'], ['rate', 'Рейтинг'], ['upd', 'Обновления'], ['new', 'Новинки'], ['az', 'По названию']],
         status: [['ongoing', 'Выходит'], ['completed', 'Завершён'], ['hiatus', 'Перерыв'], ['cancelled', 'Отменён']],
         origin: [['ja', 'Манга'], ['ko', 'Манхва'], ['zh', 'Маньхуа']],
-        rating: [['safe', 'Для всех'], ['suggestive', '16+'], ['erotica', '18+']],
+        rating: [['safe', 'Для всех'], ['suggestive', '16+']],
         ch: [['', 'Любое'], ['s', 'До 50'], ['m', '50–150'], ['l', '150+']],
     };
     let tagData = null, nextOffset = 0, searching = false, shown = 0;
@@ -372,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (i < 0 || i >= chapters.length) return;
         const wasAuto = auto;
         cancelAnimationFrame(raf); clearInterval(restoreTimer);
-        curIdx = i; chapterSelect.value = i; $('rt-chap').textContent = chapters[i].title; closeSettings(); ui(false);
+        curIdx = i; $('report-ch').classList.toggle('hidden', String(manga.id).indexOf('rd-') !== 0); chapterSelect.value = i; $('rt-chap').textContent = chapters[i].title; closeSettings(); ui(false);
         restoring = true;
         await loadPages(chapters[i].id);
         saveProgress(pos); restore(pos);
@@ -561,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = $('st-msg'), t = $('st-title').value.trim();
         m.className = 'fmsg';
         if (t.length < 2) { m.textContent = 'Введи название'; return; }
+        if (!$('st-rules').checked) { m.textContent = 'Подтверди соблюдение правил'; return; }
         const fd = new FormData(); fd.append('title', t); fd.append('description', $('st-desc').value.trim());
         const f = $('st-cover').files[0]; if (f) fd.append('cover', f);
         $('st-send').disabled = true; m.textContent = 'Отправляю…';
@@ -613,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tid) { m.textContent = 'Выбери произведение'; return; }
         if (!num || isNaN(parseFloat(num))) { m.textContent = 'Введи номер главы'; return; }
         if (!files.length) { m.textContent = 'Выбери файлы'; return; }
+        if (!$('sc-rules').checked) { m.textContent = 'Подтверди соблюдение правил'; return; }
         btn.disabled = true; prog.classList.remove('hidden'); prog.value = 0;
         try {
             m.textContent = 'Подготавливаю страницы…';
@@ -642,7 +647,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const head = el('div', 'pcard'); head.append(el('h3', '', user), el('p', 'note', ROLE_RU[(me && me.role) || 'user']));
         const out = el('button', 'btn ghost', 'Выйти'); out.onclick = () => { if (confirm('Выйти из аккаунта? Прогресс останется на сервере.')) logout(); };
-        head.append(out); box.append(head, el('h4', 'sh', 'Мои заявки'));
+        head.append(out); box.append(head);
+        const favs = el('div', 'grid'); box.append(el('h4', 'sh', 'Избранное'), favs);
+        api({ action: 'fav_list' }).then(d => { favs.textContent = d.entries.length ? '' : 'Пока пусто: добавляй произведения Reader в избранное на их странице.'; d.entries.forEach(x => favs.append(card(norm(x)))); }).catch(() => {});
+        box.append(el('h4', 'sh', 'Мои заявки'));
         const list = el('div', 'pcard', 'Загрузка…'); box.append(list);
         try {
             const d = await api({ action: 'my_subs' });
@@ -702,12 +710,131 @@ document.addEventListener('DOMContentLoaded', () => {
             box.textContent = d.queue.length ? '' : 'Заявок на проверку нет';
             d.queue.forEach(q => box.append(queueItem(q)));
         } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
+        loadReports(); loadBlocked();
     }
+    function reportItem(r) {
+        const c = el('div', 'pcard');
+        c.append(el('h3', '', ({ title: 'Произведение', chapter: 'Глава', comment: 'Комментарий' })[r.target_type] + (r.ctx ? ': ' + String(r.ctx).slice(0, 120) : '')));
+        c.append(el('p', 'note', 'Причина: ' + r.reason + ' · от ' + (r.reporter || '—')));
+        const row = el('div', 'arow'), msg = el('p', 'fmsg'), btns = [];
+        [['hide', 'Скрыть контент', ''], ['dismiss', 'Отклонить жалобу', ' ghost']].forEach(([dec, label, cls]) => {
+            const b = el('button', 'btn' + cls, label); btns.push(b);
+            b.onclick = async () => {
+                if (dec === 'hide' && !confirm('Скрыть этот контент для всех пользователей?')) return;
+                btns.forEach(x => { x.disabled = true; });
+                try { await post('mod_report_decide', { id: r.id, decision: dec }); c.remove(); }
+                catch (e) { msg.textContent = e.message; btns.forEach(x => { x.disabled = false; }); }
+            };
+            row.append(b);
+        });
+        c.append(row, msg);
+        return c;
+    }
+    async function loadReports() {
+        const box = $('mod-reports'); box.textContent = 'Загрузка…';
+        try {
+            const d = await api({ action: 'mod_reports' });
+            box.textContent = d.reports.length ? '' : 'Жалоб нет';
+            d.reports.forEach(r => box.append(reportItem(r)));
+        } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
+    }
+    $('d-block').onclick = async () => {
+        if (!dm || !confirm('Скрыть это произведение на сайте для всех?')) return;
+        try { await post('block_title', { id: dm.id, title: dm.title }); alert('Произведение скрыто.'); window.history.back(); }
+        catch (e) { alert(e.message); }
+    };
+    async function loadBlocked() {
+        const box = $('mb-list'); box.textContent = '';
+        try {
+            const d = await api({ action: 'blocklist' });
+            d.blocked.slice().reverse().forEach(b => {
+                const r = el('div', 'srow'), t = el('div', '', b.title);
+                const u = el('button', 'link', 'Вернуть');
+                u.onclick = async () => { try { await post('unblock_title', { id: b.id }); loadBlocked(); } catch (e) { alert(e.message); } };
+                r.append(t, u); box.append(r);
+            });
+        } catch (e) { box.textContent = 'Ошибка: ' + e.message; }
+    }
+    $('mb-add').onclick = async () => {
+        const m = $('mb-msg'); m.className = 'fmsg'; m.textContent = '…';
+        try { await post('block_title', { id: $('mb-id').value.trim(), title: '' }); m.className = 'fmsg ok'; m.textContent = 'Скрыто'; $('mb-id').value = ''; loadBlocked(); }
+        catch (e) { m.textContent = e.message; }
+    };
     $('ma-send').onclick = async () => {
         const m = $('ma-msg'); m.className = 'fmsg'; m.textContent = '…';
         try { await post('setrole', { username: $('ma-user').value.trim(), role: $('ma-role').value }); m.className = 'fmsg ok'; m.textContent = 'Роль изменена'; }
         catch (e) { m.textContent = e.message; }
     };
+
+    // ---------- Оценки, избранное, комментарии, жалобы (произведения Reader) ----------
+    const needLogin = () => { $('auth-modal').classList.remove('hidden'); };
+    let rpTarget = null;
+    function openReport(type, id) {
+        if (!token) { needLogin(); return; }
+        rpTarget = { type, id }; $('rp-msg').textContent = ''; $('rp-text').value = '';
+        $('report-modal').classList.remove('hidden');
+    }
+    $('rp-close').onclick = () => $('report-modal').classList.add('hidden');
+    $('rp-send').onclick = async () => {
+        const m = $('rp-msg'), extra = $('rp-text').value.trim(); m.className = 'fmsg'; m.textContent = '…';
+        try {
+            await post('report', { target_type: rpTarget.type, target_id: rpTarget.id, reason: $('rp-cat').value + (extra ? ': ' + extra : '') });
+            m.className = 'fmsg ok'; m.textContent = 'Жалоба отправлена модераторам.';
+            setTimeout(() => $('report-modal').classList.add('hidden'), 1200);
+        } catch (e) { m.textContent = e.message; }
+    };
+    $('report-ch').onclick = () => { if (chapters[curIdx]) openReport('chapter', chapters[curIdx].id); };
+
+    async function loadSocial(m) {
+        const box = $('d-social'); box.classList.remove('hidden'); box.textContent = '';
+        let s;
+        try { s = await api({ action: 'social', id: m.id }); }
+        catch (e) { box.textContent = 'Не удалось загрузить отзывы: ' + e.message; return; }
+        if (dm !== m) return;
+        const act = fn => async () => { if (!token) { needLogin(); return; } try { await fn(); loadSocial(m); } catch (e) { alert(e.message); } };
+
+        const rate = el('div', 'pcard');
+        rate.append(el('h3', '', s.votes ? 'Оценка читателей: ' + s.avg + ' (' + s.votes + ')' : 'Оценок пока нет'));
+        rate.append(el('p', 'note', s.mine ? 'Твоя оценка: ' + s.mine + '. Её можно изменить.' : 'Поставь оценку от 1 до 10'));
+        const nums = el('div', 'rates');
+        for (let i = 1; i <= 10; i++) {
+            const b = el('button', 'rate' + (s.mine === i ? ' on' : ''), String(i));
+            b.onclick = act(() => post('rating_set', { id: m.id, score: i })); nums.append(b);
+        }
+        const row = el('div', 'arow');
+        const fav = el('button', 'btn ghost' + (s.fav ? ' on' : ''), (s.fav ? '♥ В избранном' : '♡ В избранное') + ' · ' + s.favs);
+        fav.onclick = act(() => post('fav_set', { id: m.id, on: !s.fav }));
+        const rep = el('button', 'btn ghost', 'Пожаловаться'); rep.onclick = () => openReport('title', m.id);
+        row.append(fav, rep); rate.append(nums, row); box.append(rate);
+
+        box.append(el('h4', 'sh', 'Комментарии (' + s.comments + ')'));
+        const form = el('div', 'pcard'), ta = el('textarea');
+        ta.maxLength = 1000; ta.rows = 3; ta.placeholder = token ? 'Напиши комментарий…' : 'Войди, чтобы комментировать';
+        const send = el('button', 'btn', 'Отправить');
+        send.onclick = async () => {
+            if (!token) { needLogin(); return; }
+            const t = ta.value.trim(); if (!t) return; send.disabled = true;
+            try { await post('comment_add', { id: m.id, body: t }); loadSocial(m); } catch (e) { alert(e.message); send.disabled = false; }
+        };
+        form.append(ta, send); box.append(form);
+        const list = el('div'); box.append(list);
+        try {
+            const d = await api({ action: 'comments_list', id: m.id });
+            if (!d.comments.length) list.append(el('p', 'note', 'Комментариев пока нет.'));
+            d.comments.forEach(c => {
+                const r = el('div', 'pcard'), top = el('div', 'ctop'), crow = el('div', 'crow');
+                top.append(el('b', '', c.user || 'Пользователь'), el('span', 'note', new Date(c.created_at).toLocaleDateString('ru-RU') + (c.edited ? ' · изменено' : '')));
+                r.append(top, el('p', 'cbody', c.body));
+                const mk = (label, fn) => { const b = el('button', 'link', label); b.onclick = fn; crow.append(b); };
+                if (c.mine) {
+                    mk('Изменить', act(async () => { const t = prompt('Изменить комментарий:', c.body); if (t && t.trim()) await post('comment_edit', { id: c.id, body: t.trim() }); }));
+                    mk('Удалить', act(async () => { if (confirm('Удалить комментарий?')) await post('comment_delete', { id: c.id }); }));
+                } else mk('Пожаловаться', () => openReport('comment', c.id));
+                if (d.staff && !c.mine) mk('Скрыть', act(async () => { await post('comment_hide', { id: c.id }); }));
+                r.append(crow); list.append(r);
+            });
+        } catch (e) { list.append(el('p', 'note', 'Ошибка: ' + e.message)); }
+    }
 
     // ---------- Полный экран в настройках ----------
     if (!fsOK) $('fs-row').classList.add('hidden');
